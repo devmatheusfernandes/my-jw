@@ -161,6 +161,27 @@ export const findCongregationsByName = async (nome: string): Promise<Congregatio
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as CongregationDoc) }));
 };
 
+export const searchCongregations = async (identifier: string): Promise<CongregationWithId[]> => {
+  const term = identifier.trim()
+  const out = new Map<string, CongregationWithId>()
+
+  if (term.length === 0) return []
+
+  const direct = await getDoc(doc(db, 'congregations', term))
+  if (direct.exists()) out.set(direct.id, { id: direct.id, ...(direct.data() as CongregationDoc) })
+
+  const byCode = await getDocs(query(collection(db, 'congregations'), where('accessCode', '==', term)))
+  byCode.docs.forEach((d) => out.set(d.id, { id: d.id, ...(d.data() as CongregationDoc) }))
+
+  const byName = await getDocs(query(collection(db, 'congregations'), where('nome', '>=', term), where('nome', '<=', term + '\uf8ff')))
+  byName.docs.forEach((d) => out.set(d.id, { id: d.id, ...(d.data() as CongregationDoc) }))
+
+  const byCity = await getDocs(query(collection(db, 'congregations'), where('cidade', '>=', term), where('cidade', '<=', term + '\uf8ff')))
+  byCity.docs.forEach((d) => out.set(d.id, { id: d.id, ...(d.data() as CongregationDoc) }))
+
+  return Array.from(out.values())
+}
+
 export const getUserDoc = async (uid: string): Promise<UserDoc | null> => {
   const ref = doc(db, 'users', uid)
   const snap = await getDoc(ref)

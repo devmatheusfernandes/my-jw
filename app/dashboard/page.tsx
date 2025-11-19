@@ -101,10 +101,6 @@ export default function Page() {
 
   return (
     <div className="p-4 space-y-6">
-      <h2 className="text-xl font-semibold">Início</h2>
-
-      <div className="bg-muted/50 min-h-[20vh] mt-4 rounded-xl" />
-
       <div className="space-y-3">
         <h3 className="text-lg font-medium">Meus territórios</h3>
         {loading ? (

@@ -11,12 +11,15 @@ import {
 import {
   SidebarGroup,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar"
 
 export function NavMain({
@@ -33,9 +36,19 @@ export function NavMain({
     }[]
   }[]
 }) {
+  const { state, isMobile } = useSidebar()
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Menu</SidebarGroupLabel>
+      {!isMobile && 
+      <SidebarHeader className={state == "expanded" ? "flex flex-row justify-between bg-primary/10 p-3 rounded-md mb-4" : "flex items-center bg-primary/10 rounded-md mb-4 p-1"}>
+        {state == "expanded" && (
+          <p className="text-primary font-bold">Meu JW</p>
+        )}
+        <div className={state == "expanded" ? "flex justify-center" : "block"}>
+          <SidebarTrigger className="hidden md:flex" />
+        </div>
+      </SidebarHeader>}
+     
       <SidebarMenu>
         {items.map((item) => (
           item.items && item.items.length > 0 ? (
