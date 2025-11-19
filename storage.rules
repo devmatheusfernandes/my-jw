@@ -1,0 +1,14 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /congregations/{cid}/territories/{tid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}

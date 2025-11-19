@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Home, User, Users, Settings } from "lucide-react"
+import { Home, User, Users, Settings, Map } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -18,6 +18,7 @@ const data = {
     { title: "Início", url: "/dashboard", icon: Home, isActive: true },
     { title: "Meu Perfil", url: "/dashboard/meu-perfil", icon: User },
     { title: "Congregação", url: "/dashboard/congregacao", icon: Users },
+    { title: "Território", url: "/dashboard/territorio", icon: Map },
     { title: "Usuários", url: "/dashboard/usuarios", icon: Users },
     { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
   ],

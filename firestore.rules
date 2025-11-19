@@ -22,6 +22,11 @@ service cloud.firestore {
         allow read: if isAuthed()
         allow write: if isAdminOf(id)
       }
+
+      match /territory/{territoryId} {
+        allow read: if isAuthed() || resource.data.sharedOpen == true
+        allow write: if isAdminOf(id)
+      }
     }
   }
 }

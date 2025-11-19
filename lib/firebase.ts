@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, getDocs, serverTimestamp, arrayUnion } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 
 const firebaseConfig = {
   apiKey: "AIzaSyBUG9XjV4GivPD1sOnpAqyfo7GQsfd5jHw",
@@ -16,6 +17,7 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const db = getFirestore(app);
+export const storage = getStorage(app)
 
 const ensureUserDoc = async (user: User) => {
   const userRef = doc(db, 'users', user.uid);
@@ -136,6 +138,24 @@ export type UserDoc = {
   registerId?: string | null
 }
 
+export type TerritoryRecord = {
+  startedAt: string
+  finishedAt?: string
+  assignedUserUids: string[]
+  observacoes?: string
+}
+
+export type TerritoryDoc = {
+  cidade: string
+  grupo: string
+  codigo: string
+  geoJson?: string
+  imageUrl?: string
+  registros?: TerritoryRecord[]
+  sharedOpen?: boolean
+  createdAt?: unknown
+}
+
 export const findCongregationsByName = async (nome: string): Promise<CongregationWithId[]> => {
   const snap = await getDocs(query(collection(db, 'congregations'), where('nome', '==', nome)));
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as CongregationDoc) }));
@@ -212,6 +232,88 @@ export const rejectUserAccess = async (uid: string) => {
 export const unlinkUserFromCongregation = async (uid: string) => {
   const userRef = doc(db, 'users', uid)
   await setDoc(userRef, { congregacaoId: null, registerCongregationId: null, registerId: null, requestCongregationStatus: 'no-congregation' }, { merge: true })
+}
+
+export const listTerritories = async (congregacaoId: string): Promise<({ id: string } & TerritoryDoc)[]> => {
+  const snap = await getDocs(collection(db, 'congregations', congregacaoId, 'territory'))
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as TerritoryDoc) }))
+}
+
+export const createTerritory = async (congregacaoId: string, data: { cidade: string; grupo: string; codigo: string; geoJson?: string; imageUrl?: string }) => {
+  const ref = await addDoc(collection(db, 'congregations', congregacaoId, 'territory'), {
+    ...data,
+    registros: [],
+    createdAt: serverTimestamp(),
+  })
+  return { id: ref.id }
+}
+
+export const addTerritoryRecord = async (congregacaoId: string, territoryId: string, record: TerritoryRecord) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
+  const payload: { startedAt: string; assignedUserUids: string[]; finishedAt?: string; observacoes?: string } = {
+    startedAt: record.startedAt,
+    assignedUserUids: record.assignedUserUids,
+  }
+  if (record.finishedAt && record.finishedAt.length > 0) {
+    payload.finishedAt = record.finishedAt
+  }
+  if (record.observacoes && record.observacoes.length > 0) {
+    payload.observacoes = record.observacoes
+  }
+  await setDoc(ref, { registros: arrayUnion(payload) }, { merge: true })
+}
+
+export const uploadTerritoryImage = async (congregacaoId: string, territoryId: string, file: Blob) => {
+  const path = `congregations/${congregacaoId}/territories/${territoryId}`
+  const r = storageRef(storage, path)
+  await uploadBytes(r, file)
+  const url = await getDownloadURL(r)
+  const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
+  await setDoc(ref, { imageUrl: url }, { merge: true })
+  return url
+}
+
+export const getTerritoryDoc = async (congregacaoId: string, territoryId: string): Promise<({ id: string } & TerritoryDoc) | null> => {
+  const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
+  const snap = await getDoc(ref)
+  return snap.exists() ? ({ id: snap.id, ...(snap.data() as TerritoryDoc) }) : null
+}
+
+export const updateTerritory = async (congregacaoId: string, territoryId: string, data: Partial<{ cidade: string; grupo: string; codigo: string; geoJson?: string; imageUrl?: string }>) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
+  await setDoc(ref, data, { merge: true })
+}
+
+export const closeTerritoryRecordForUser = async (congregacaoId: string, territoryId: string, uid: string, finishedAt: string, observacoes?: string) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return
+  const data = snap.data() as TerritoryDoc
+  const registros = (data.registros || []).map((r) => {
+    if (!r.finishedAt && r.assignedUserUids?.includes(uid)) {
+      const updated: TerritoryRecord = { ...r, finishedAt }
+      if (observacoes && observacoes.length > 0) {
+        updated.observacoes = observacoes
+      }
+      return updated
+    }
+    return r
+  })
+  await setDoc(ref, { registros, sharedOpen: false }, { merge: true })
+}
+
+export const deleteOpenTerritoryRecordForUser = async (congregacaoId: string, territoryId: string, uid: string) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return
+  const data = snap.data() as TerritoryDoc
+  const registros = (data.registros || []).filter((r) => !(r.assignedUserUids?.includes(uid) && !r.finishedAt))
+  await setDoc(ref, { registros, sharedOpen: false }, { merge: true })
+}
+
+export const setTerritoryShareOpen = async (congregacaoId: string, territoryId: string, value: boolean) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
+  await setDoc(ref, { sharedOpen: value }, { merge: true })
 }
 
 export const signInWithGoogle = async () => {
