@@ -141,7 +141,7 @@ export type UserDoc = {
 export type TerritoryRecord = {
   startedAt: string
   finishedAt?: string
-  assignedUserUids: string[]
+  assignedRegisterIds: string[]
   observacoes?: string
 }
 
@@ -250,9 +250,9 @@ export const createTerritory = async (congregacaoId: string, data: { cidade: str
 
 export const addTerritoryRecord = async (congregacaoId: string, territoryId: string, record: TerritoryRecord) => {
   const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
-  const payload: { startedAt: string; assignedUserUids: string[]; finishedAt?: string; observacoes?: string } = {
+  const payload: { startedAt: string; assignedRegisterIds: string[]; finishedAt?: string; observacoes?: string } = {
     startedAt: record.startedAt,
-    assignedUserUids: record.assignedUserUids,
+    assignedRegisterIds: record.assignedRegisterIds,
   }
   if (record.finishedAt && record.finishedAt.length > 0) {
     payload.finishedAt = record.finishedAt
@@ -284,13 +284,13 @@ export const updateTerritory = async (congregacaoId: string, territoryId: string
   await setDoc(ref, data, { merge: true })
 }
 
-export const closeTerritoryRecordForUser = async (congregacaoId: string, territoryId: string, uid: string, finishedAt: string, observacoes?: string) => {
+export const closeTerritoryRecordForUser = async (congregacaoId: string, territoryId: string, registerId: string, finishedAt: string, observacoes?: string) => {
   const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
   const snap = await getDoc(ref)
   if (!snap.exists()) return
   const data = snap.data() as TerritoryDoc
   const registros = (data.registros || []).map((r) => {
-    if (!r.finishedAt && r.assignedUserUids?.includes(uid)) {
+    if (!r.finishedAt && r.assignedRegisterIds?.includes(registerId)) {
       const updated: TerritoryRecord = { ...r, finishedAt }
       if (observacoes && observacoes.length > 0) {
         updated.observacoes = observacoes
@@ -302,12 +302,12 @@ export const closeTerritoryRecordForUser = async (congregacaoId: string, territo
   await setDoc(ref, { registros, sharedOpen: false }, { merge: true })
 }
 
-export const deleteOpenTerritoryRecordForUser = async (congregacaoId: string, territoryId: string, uid: string) => {
+export const deleteOpenTerritoryRecordForUser = async (congregacaoId: string, territoryId: string, registerId: string) => {
   const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
   const snap = await getDoc(ref)
   if (!snap.exists()) return
   const data = snap.data() as TerritoryDoc
-  const registros = (data.registros || []).filter((r) => !(r.assignedUserUids?.includes(uid) && !r.finishedAt))
+  const registros = (data.registros || []).filter((r) => !(r.assignedRegisterIds?.includes(registerId) && !r.finishedAt))
   await setDoc(ref, { registros, sharedOpen: false }, { merge: true })
 }
 

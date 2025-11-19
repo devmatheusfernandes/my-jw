@@ -28,7 +28,7 @@ export default function TerritorioPage() {
   const [loading, setLoading] = React.useState(true)
   const [congregacaoId, setCongregacaoId] = React.useState<string | null>(null)
   const [isAdmin, setIsAdmin] = React.useState(false)
-  const [eligibleUsers, setEligibleUsers] = React.useState<{ uid: string; nome: string }[]>([])
+  const [eligibleRegisters, setEligibleRegisters] = React.useState<{ registerId: string; nome: string }[]>([])
   const [territories, setTerritories] = React.useState<({ id: string } & TerritoryDoc)[]>([])
 
   const [openCreate, setOpenCreate] = React.useState(false)
@@ -57,7 +57,7 @@ export default function TerritorioPage() {
         const c = await getCongregationDoc(u.congregacaoId)
         setIsAdmin(!!c?.admins?.includes(uid))
         const members = await listUsersByCongregation(u.congregacaoId)
-        setEligibleUsers(members.filter((m) => !!m.registerId).map((m) => ({ uid: m.uid, nome: m.nome })))
+        setEligibleRegisters(members.filter((m) => !!m.registerId).map((m) => ({ registerId: m.registerId as string, nome: m.nome })))
       } finally {
         setLoading(false)
       }
@@ -115,7 +115,7 @@ export default function TerritorioPage() {
       const rec: TerritoryRecord = {
         startedAt,
         finishedAt: finishedAt || undefined,
-        assignedUserUids: assigned,
+        assignedRegisterIds: assigned,
       }
       await addTerritoryRecord(congregacaoId, openAddRecordFor, rec)
       setOpenAddRecordFor(null)
@@ -242,8 +242,8 @@ export default function TerritorioPage() {
             <div className="space-y-2 md:col-span-2">
               <Label>Designados</Label>
               <select multiple className="h-24 rounded-md border px-2" value={assigned} onChange={(e) => setAssigned(Array.from(e.target.selectedOptions).map((o) => o.value))}>
-                {eligibleUsers.map((u) => (
-                  <option key={u.uid} value={u.uid}>{u.nome}</option>
+                {eligibleRegisters.map((r) => (
+                  <option key={r.registerId} value={r.registerId}>{r.nome}</option>
                 ))}
               </select>
             </div>

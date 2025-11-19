@@ -18,6 +18,7 @@ export default function Page() {
   const [finishDate, setFinishDate] = React.useState<Date | undefined>(undefined)
   const [observacoes, setObservacoes] = React.useState("")
   const uid = user?.uid
+  const [userRegisterId, setUserRegisterId] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     const run = async () => {
@@ -27,6 +28,7 @@ export default function Page() {
         const u = await getUserDoc(uid)
         if (!u?.congregacaoId) return
         setCongregacaoId(u.congregacaoId)
+        setUserRegisterId(u.registerId || null)
         const ts = await listTerritories(u.congregacaoId)
         setTerritories(ts)
       } finally {
@@ -38,17 +40,17 @@ export default function Page() {
 
   const myOpenAssignments = React.useMemo(() => {
     if (!uid) return [] as ({ id: string } & TerritoryDoc)[]
-    return territories.filter((t) => (t.registros || []).some((r) => r.assignedUserUids?.includes(uid) && !r.finishedAt))
-  }, [territories, uid])
+    return territories.filter((t) => (t.registros || []).some((r) => (userRegisterId ? r.assignedRegisterIds?.includes(userRegisterId) : false) && !r.finishedAt))
+  }, [territories, userRegisterId])
 
   const openRecordByTerritoryId = React.useMemo(() => {
     const m: Record<string, { startedAt: string }> = {}
     territories.forEach((t) => {
-      const r = (t.registros || []).find((r) => r.assignedUserUids?.includes(uid || "") && !r.finishedAt)
+      const r = (t.registros || []).find((r) => r.assignedRegisterIds?.includes(userRegisterId || "") && !r.finishedAt)
       if (r) m[t.id] = { startedAt: r.startedAt }
     })
     return m
-  }, [territories, uid])
+  }, [territories, userRegisterId])
 
   const handleOpenDevolver = (territoryId: string) => {
     setActiveTerritoryId(territoryId)
@@ -58,7 +60,7 @@ export default function Page() {
   }
 
   const handleConfirmDevolver = async () => {
-    if (!uid || !congregacaoId || !activeTerritoryId) return
+    if (!userRegisterId || !congregacaoId || !activeTerritoryId) return
     const d = finishDate
     if (!d) {
       toast.error("Selecione a data de devolução")
@@ -74,7 +76,7 @@ export default function Page() {
     }
     const iso = d.toISOString().slice(0, 10)
     try {
-      await closeTerritoryRecordForUser(congregacaoId, activeTerritoryId, uid, iso, observacoes.trim() || undefined)
+      await closeTerritoryRecordForUser(congregacaoId, activeTerritoryId, userRegisterId, iso, observacoes.trim() || undefined)
       toast.success("Território devolvido")
       const ts = await listTerritories(congregacaoId)
       setTerritories(ts)
@@ -85,9 +87,9 @@ export default function Page() {
   }
 
   const handleNaoTrabalhado = async () => {
-    if (!uid || !congregacaoId || !activeTerritoryId) return
+    if (!userRegisterId || !congregacaoId || !activeTerritoryId) return
     try {
-      await deleteOpenTerritoryRecordForUser(congregacaoId, activeTerritoryId, uid)
+      await deleteOpenTerritoryRecordForUser(congregacaoId, activeTerritoryId, userRegisterId)
       toast.success("Registro removido")
       const ts = await listTerritories(congregacaoId)
       setTerritories(ts)
