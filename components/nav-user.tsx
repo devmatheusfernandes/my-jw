@@ -15,11 +15,13 @@ import * as React from "react"
 import { logout } from "@/lib/firebase"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/providers/auth-provider"
+import { useTheme } from "next-themes"
 
 export function NavUser() {
   const { isMobile } = useSidebar()
   const router = useRouter()
   const { user } = useAuth()
+  const { setTheme } = useTheme()
   const name = user?.displayName || "Usuário"
   const email = user?.email || ""
   const avatar = user?.photoURL || ""
@@ -62,6 +64,11 @@ export function NavUser() {
                 </div>
               </div>
             </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Tema</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => setTheme("light")}>Claro</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setTheme("dark")}>Escuro</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setTheme("system")}>Sistema</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={async () => {

@@ -25,19 +25,21 @@ export default function AuthenticationPage() {
             transition={{ duration: 0.5 }}
             className="relative z-20 flex items-center text-lg font-medium"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mr-2 h-6 w-6"
-            >
-              <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
-            </svg>
-            Meu JW
+          <span
+            className="h-8 w-8 mr-2 inline-block bg-primary"
+            style={{
+              WebkitMaskImage: 'url(/icons/kingdom-hall.svg)',
+              maskImage: 'url(/icons/kingdom-hall.svg)',
+              WebkitMaskSize: 'contain',
+              maskSize: 'contain',
+              WebkitMaskRepeat: 'no-repeat',
+              maskRepeat: 'no-repeat',
+              WebkitMaskPosition: 'center',
+              maskPosition: 'center',
+            }}
+            aria-hidden="true"
+          />
+          Meu JW
           </motion.div>
         </div>
         <div className="flex items-center justify-center h-full lg:p-8 p-8">
@@ -58,8 +60,8 @@ export default function AuthenticationPage() {
             <UserAuthForm />
             <FieldDescription className="px-6 text-center">
               Por continuar, você concorda com nossos{" "}
-              <Link href="/terms">Termos de Serviço</Link> e{" "}
-              <Link href="/privacy">Política de Privacidade</Link>.
+              <Link href="/">Termos de Serviço</Link> e{" "}
+              <Link href="/">Política de Privacidade</Link>.
             </FieldDescription>
           </motion.div>
         </div>
