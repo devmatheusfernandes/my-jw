@@ -225,7 +225,7 @@ export default function TerritorioPage() {
                 >
                   {t.imageUrl ? (
                     <div className="relative aspect-square w-full">
-                      <Image src={t.imageUrl} alt={t.codigo} className="absolute inset-0 h-full w-full object-cover" />
+                      <Image src={t.imageUrl} alt={t.codigo} className="absolute inset-0 h-full w-full object-cover" width={500} height={500}/>
                       <div className="absolute inset-0 bg-black/50 transition-colors group-hover:bg-black/60" />
                     </div>
                   ) : (

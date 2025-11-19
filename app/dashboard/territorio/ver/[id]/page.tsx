@@ -13,6 +13,7 @@ import {
   getCongregationDoc,
   getTerritoryDoc,
   setTerritoryShareOpen,
+  listRegisters,
   type TerritoryDoc,
 } from "@/lib/firebase"
 import Image from "next/image"
@@ -30,6 +31,7 @@ export default function VerTerritorioPage() {
   const mapRef = React.useRef<HTMLDivElement | null>(null)
   const mapInstRef = React.useRef<any>(null)
   const locationRef = React.useRef<any>(null)
+  const [registerMap, setRegisterMap] = React.useState<Record<string, string>>({})
 
   const loadLeaflet = React.useCallback(async () => {
     if (typeof window === 'undefined') return
@@ -103,6 +105,8 @@ export default function VerTerritorioPage() {
         setCongregacaoId(u.congregacaoId)
         const c = await getCongregationDoc(u.congregacaoId)
         setIsAdmin(!!c?.admins?.includes(uid))
+        const regs = await listRegisters(u.congregacaoId)
+        setRegisterMap(Object.fromEntries(regs.map((r) => [r.id, r.nomeCompleto])))
         const t = await getTerritoryDoc(u.congregacaoId, params.id)
         if (t) setSelected(t)
         if (t) {
@@ -153,12 +157,12 @@ export default function VerTerritorioPage() {
                     </Button>
                   </div>
                   <div className="flex h-full w-full items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
-                    <Image src={selected.imageUrl} alt={selected.codigo} className="max-h-[90vh] max-w-[90vw] object-contain" />
+                    <Image src={selected.imageUrl} alt={selected.codigo} className="max-h-[90vh] max-w-[90vw] object-contain" width={500} height={500} />
                   </div>
                 </div>
               ) : (
                 <div className="relative">
-                  <Image src={selected.imageUrl} alt={selected.codigo} className="h-48 w-full object-cover md:h-64" />
+                  <Image src={selected.imageUrl} alt={selected.codigo} className="h-48 w-full object-cover md:h-64" width={500} height={500} />
                   <div className="absolute inset-0 bg-black/30" />
                 </div>
               )}
@@ -212,7 +216,7 @@ export default function VerTerritorioPage() {
                     <motion.div key={idx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="rounded-md border p-3 text-sm">
                       <div>Início: {r.startedAt}</div>
                       <div>Fim: {r.finishedAt || "—"}</div>
-                      <div>Designados: {r.assignedRegisterIds.join(", ")}</div>
+                      <div>Designado: {r.assignedRegisterIds.map((id) => registerMap[id] || id).join(", ")}</div>
                     </motion.div>
                   ))}
                 </div>

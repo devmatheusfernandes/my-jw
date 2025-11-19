@@ -168,7 +168,7 @@ export default function CongregacaoPage() {
 
       <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="rounded-md border overflow-hidden">
         <div className="relative h-72 w-full">
-          <Image src={ImageHeader} alt="Congregação" fill className="object-cover" priority />
+          <Image src={ImageHeader} alt="Congregação" fill className="object-cover" priority width={500} height={500} />
           <div className="absolute inset-0 bg-black/20" />
         </div>
         <div className="p-4 space-y-4">
