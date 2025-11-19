@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthed() { return request.auth != null }
+    function isSelf(uid) { return isAuthed() && request.auth.uid == uid }
+    function isAdminOf(congregationId) {
+      return isAuthed() &&
+        congregationId is string &&
+        get(/databases/$(database)/documents/congregations/$(congregationId)).data.admins.hasAny([request.auth.uid])
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isAdminOf(resource.data.congregacaoId)
+      allow write: if isSelf(uid) || isAdminOf(resource.data.congregacaoId)
+    }
+
+    match /congregations/{id} {
+      allow read: if isAuthed()
+      allow write: if isAuthed()
+
+      match /register/{regId} {
+        allow read: if isAuthed()
+        allow write: if isAdminOf(id)
+      }
+    }
+  }
+}

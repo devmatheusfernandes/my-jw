@@ -1,0 +1,235 @@
+import { initializeApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBUG9XjV4GivPD1sOnpAqyfo7GQsfd5jHw",
+  authDomain: "testing-project-188d3.firebaseapp.com",
+  databaseURL: "https://testing-project-188d3-default-rtdb.firebaseio.com",
+  projectId: "testing-project-188d3",
+  storageBucket: "testing-project-188d3.firebasestorage.app",
+  messagingSenderId: "1019677032831",
+  appId: "1:1019677032831:web:3539fada4e37059aa99a4a",
+};
+
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
+export const db = getFirestore(app);
+
+const ensureUserDoc = async (user: User) => {
+  const userRef = doc(db, 'users', user.uid);
+  const existing = await getDoc(userRef);
+  if (!existing.exists()) {
+    await setDoc(userRef, {
+      nome: user.displayName || '',
+      congregacaoId: null,
+      requestCongregationStatus: 'pending',
+    });
+  }
+};
+
+const generateUniqueCode = async () => {
+  const gen = () => String(Math.floor(100000 + Math.random() * 900000));
+  let code = gen();
+  let exists = true;
+  while (exists) {
+    const q = query(collection(db, 'congregations'), where('accessCode', '==', code));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      exists = false;
+    } else {
+      code = gen();
+    }
+  }
+  return code;
+};
+
+export const createCongregation = async (
+  data: {
+    nome: string;
+    cidade: string;
+    estado: string;
+    meioSemanaDia: string;
+    meioSemanaHora: string;
+    fimSemanaDia: string;
+    fimSemanaHora: string;
+  },
+  creatorUid: string
+) => {
+  const accessCode = await generateUniqueCode();
+  const ref = await addDoc(collection(db, 'congregations'), {
+    ...data,
+    accessCode,
+    admins: [creatorUid],
+    createdBy: creatorUid,
+    createdAt: serverTimestamp(),
+  });
+  await setDoc(ref, { congregationId: ref.id }, { merge: true });
+  return { id: ref.id, accessCode };
+};
+
+export const requestCongregationAccess = async (uid: string, identifier: string) => {
+  // Tenta por ID diretamente
+  let congregacaoId: string | null = null;
+  const direct = await getDoc(doc(db, 'congregations', identifier));
+  if (direct.exists()) {
+    congregacaoId = direct.id;
+  } else {
+    // Tenta por nome exato
+    const byName = await getDocs(query(collection(db, 'congregations'), where('nome', '==', identifier)));
+    if (!byName.empty) {
+      congregacaoId = byName.docs[0].id;
+    } else {
+      // Fallback: tenta pelo accessCode antigo
+      const byCode = await getDocs(query(collection(db, 'congregations'), where('accessCode', '==', identifier)));
+      if (!byCode.empty) {
+        congregacaoId = byCode.docs[0].id;
+      }
+    }
+  }
+
+  if (!congregacaoId) {
+    throw new Error('Congregação não encontrada');
+  }
+
+  const userRef = doc(db, 'users', uid);
+  await setDoc(
+    userRef,
+    {
+      congregacaoId,
+      requestCongregationStatus: 'pending',
+    },
+    { merge: true }
+  );
+};
+
+export type CongregationDoc = {
+  nome: string;
+  cidade: string;
+  estado: string;
+  meioSemanaDia: string;
+  meioSemanaHora: string;
+  fimSemanaDia: string;
+  fimSemanaHora: string;
+  admins?: string[];
+  createdBy?: string;
+  createdAt?: unknown;
+  congregationId?: string;
+  accessCode?: string;
+};
+
+export type CongregationWithId = { id: string } & CongregationDoc;
+
+export type RegisterDoc = {
+  nomeCompleto: string
+  nascimento?: string
+  batismo?: string
+  createdAt?: unknown
+}
+
+export type UserDoc = {
+  nome: string
+  congregacaoId: string | null
+  requestCongregationStatus: 'pending' | 'accepted' | 'rejected' | 'no-congregation'
+  registerCongregationId?: string | null
+  registerId?: string | null
+}
+
+export const findCongregationsByName = async (nome: string): Promise<CongregationWithId[]> => {
+  const snap = await getDocs(query(collection(db, 'congregations'), where('nome', '==', nome)));
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as CongregationDoc) }));
+};
+
+export const getUserDoc = async (uid: string): Promise<UserDoc | null> => {
+  const ref = doc(db, 'users', uid)
+  const snap = await getDoc(ref)
+  return snap.exists() ? (snap.data() as UserDoc) : null
+}
+
+export const getCongregationDoc = async (id: string): Promise<CongregationWithId | null> => {
+  const ref = doc(db, 'congregations', id)
+  const snap = await getDoc(ref)
+  return snap.exists() ? ({ id: snap.id, ...(snap.data() as CongregationDoc) }) : null
+}
+
+export const updateCongregation = async (
+  id: string,
+  data: Partial<{
+    nome: string
+    cidade: string
+    estado: string
+    meioSemanaDia: string
+    meioSemanaHora: string
+    fimSemanaDia: string
+    fimSemanaHora: string
+  }>
+) => {
+  const ref = doc(db, 'congregations', id)
+  await setDoc(ref, data, { merge: true })
+}
+
+export const listUsersByCongregation = async (congregacaoId: string): Promise<(UserDoc & { uid: string })[]> => {
+  const q = query(collection(db, 'users'), where('congregacaoId', '==', congregacaoId))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => ({ uid: d.id, ...(d.data() as UserDoc) }))
+}
+
+export const listPendingUsersByCongregation = async (congregacaoId: string): Promise<(UserDoc & { uid: string })[]> => {
+  const q = query(collection(db, 'users'), where('congregacaoId', '==', congregacaoId), where('requestCongregationStatus', '==', 'pending'))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => ({ uid: d.id, ...(d.data() as UserDoc) }))
+}
+
+export const listRegisters = async (congregacaoId: string): Promise<({ id: string } & RegisterDoc)[]> => {
+  const snap = await getDocs(collection(db, 'congregations', congregacaoId, 'register'))
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as RegisterDoc) }))
+}
+
+export const createRegister = async (congregacaoId: string, data: { nomeCompleto: string; nascimento?: string; batismo?: string }) => {
+  const ref = await addDoc(collection(db, 'congregations', congregacaoId, 'register'), {
+    ...data,
+    createdAt: serverTimestamp(),
+  })
+  return { id: ref.id }
+}
+
+export const updateRegister = async (congregacaoId: string, registerId: string, data: Partial<{ nomeCompleto: string; nascimento?: string; batismo?: string }>) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'register', registerId)
+  await setDoc(ref, data, { merge: true })
+}
+
+export const attachUserToRegister = async (uid: string, congregacaoId: string, registerId: string) => {
+  const userRef = doc(db, 'users', uid)
+  await setDoc(userRef, { registerCongregationId: congregacaoId, registerId, requestCongregationStatus: 'accepted' }, { merge: true })
+}
+
+export const rejectUserAccess = async (uid: string) => {
+  const userRef = doc(db, 'users', uid)
+  await setDoc(userRef, { congregacaoId: null, requestCongregationStatus: 'rejected', registerCongregationId: null, registerId: null }, { merge: true })
+}
+
+export const unlinkUserFromCongregation = async (uid: string) => {
+  const userRef = doc(db, 'users', uid)
+  await setDoc(userRef, { congregacaoId: null, registerCongregationId: null, registerId: null, requestCongregationStatus: 'no-congregation' }, { merge: true })
+}
+
+export const signInWithGoogle = async () => {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    await ensureUserDoc(result.user);
+    return result.user;
+  } catch (error) {
+    console.error('Erro ao fazer login com Google:', error);
+    throw error;
+  }
+};
+
+export const logout = async () => {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    console.error('Erro ao fazer logout:', error);
+    throw error;
+  }
+};
