@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
+import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/components/providers/auth-provider"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal } from "lucide-react"
+import { MoreHorizontal, Trash, Eye, Pencil, PlusCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { motion } from "framer-motion"
 import {
   getUserDoc,
   getCongregationDoc,
@@ -18,9 +21,11 @@ import {
   createTerritory,
   uploadTerritoryImage,
   addTerritoryRecord,
+  deleteTerritory,
   type TerritoryDoc,
   type TerritoryRecord,
 } from "@/lib/firebase"
+import Image from "next/image"
 
 export default function TerritorioPage() {
   const { user } = useAuth()
@@ -44,6 +49,9 @@ export default function TerritorioPage() {
   const [finishedAt, setFinishedAt] = React.useState("")
   const [assigned, setAssigned] = React.useState<string[]>([])
   const [savingRecord, setSavingRecord] = React.useState(false)
+  const [search, setSearch] = React.useState("")
+  const [deleteFor, setDeleteFor] = React.useState<string | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
 
   React.useEffect(() => {
     const run = async () => {
@@ -133,22 +141,32 @@ export default function TerritorioPage() {
 
   const grouped = React.useMemo(() => {
     const map = new Map<string, ({ id: string } & TerritoryDoc)[]>()
-    territories.forEach((t) => {
+    const q = search.trim().toLowerCase()
+    const base = q
+      ? territories.filter((t) => [t.codigo, t.cidade, t.grupo].some((v) => (v || "").toLowerCase().includes(q)))
+      : territories
+    base.forEach((t) => {
       const g = t.grupo || "Sem grupo"
       const arr = map.get(g) || []
       arr.push(t)
       map.set(g, arr)
     })
     return Array.from(map.entries()).map(([grp, items]) => ({ grp, items }))
-  }, [territories])
+  }, [territories, search])
 
-  if (loading) return <div className="p-4">Carregando...</div>
+  if (loading) return (
+    <div className="min-h-svh flex items-center justify-center">
+      <Spinner className="h-8 w-8" />
+    </div>
+  )
   if (!user || !congregacaoId) return <div className="p-4">Você precisa estar em uma congregação</div>
 
   return (
     <div className="p-4 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Territórios</h2>
+        <div className="flex items-center gap-2">
+          <Input placeholder="Buscar por código, cidade ou grupo" value={search} onChange={(e) => setSearch(e.target.value)} className="w-64" />
         {isAdmin && (
           <Drawer open={openCreate} onOpenChange={setOpenCreate}>
             <DrawerTrigger asChild>
@@ -186,42 +204,68 @@ export default function TerritorioPage() {
             </DrawerContent>
           </Drawer>
         )}
+        </div>
       </div>
 
       {grouped.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nenhum território</p>
       ) : (
         grouped.map(({ grp, items }) => (
-          <div key={grp} className="space-y-2">
+          <motion.div key={grp} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-2">
             <h3 className="text-lg font-medium">Grupo: {grp}</h3>
-            <div className="grid gap-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {items.map((t) => (
-                <div key={t.id} className="rounded-md border p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium">{t.codigo} — {t.cidade}</div>
-                    <div className="flex items-center gap-2">
-                      {isAdmin && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => router.push(`/dashboard/territorio/ver/${t.id}`)}>Ver</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => router.push(`/dashboard/territorio/editar/${t.id}`)}>Editar</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setOpenAddRecordFor(t.id)}>Adicionar registro</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
-                  </div>
+                <motion.div
+                  key={t.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={() => router.push(`/dashboard/territorio/ver/${t.id}`)}
+                  className="group cursor-pointer overflow-hidden rounded-md border hover:shadow-sm transition"
+                >
                   {t.imageUrl ? (
-                    <img src={t.imageUrl} alt={t.codigo} className="mt-2 h-32 w-full object-cover rounded" />
-                  ) : null}
-                  <div className="mt-2 text-xs text-muted-foreground">Registros: {t.registros?.length || 0}</div>
-                </div>
+                    <div className="relative aspect-square w-full">
+                      <Image src={t.imageUrl} alt={t.codigo} className="absolute inset-0 h-full w-full object-cover" />
+                      <div className="absolute inset-0 bg-black/50 transition-colors group-hover:bg-black/60" />
+                    </div>
+                  ) : (
+                    <div className="aspect-square w-full bg-muted" />
+                  )}
+                  <div className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium">{t.codigo} — {t.cidade}</div>
+                      <div className="flex items-center gap-2">
+                        {isAdmin && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="icon" onClick={(e) => e.stopPropagation()}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/territorio/ver/${t.id}`) }}>
+                                <Eye className="mr-2 h-4 w-4" /> Ver
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/territorio/editar/${t.id}`) }}>
+                                <Pencil className="mr-2 h-4 w-4" /> Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setOpenAddRecordFor(t.id) }}>
+                                <PlusCircle className="mr-2 h-4 w-4" /> Designar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive hover:text-white hover:bg-destructive/40 focus:bg-destructive/15 transition-all duration-100 ease-in-out" onClick={(e) => { e.stopPropagation(); setDeleteFor(t.id) }}>
+                                <Trash className="mr-2 h-4 w-4" /> Deletar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">Registros: {t.registros?.length || 0}</div>
+                  </div>
+                </motion.div>
               ))}
             </div>
-          </div>
+          </motion.div>
         ))
       )}
 
@@ -253,6 +297,31 @@ export default function TerritorioPage() {
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
+      <Dialog open={!!deleteFor} onOpenChange={(v) => setDeleteFor(v ? deleteFor : null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar deleção</DialogTitle>
+            <DialogDescription>Esta ação remove o território e sua imagem.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteFor(null)} disabled={deleting}>Cancelar</Button>
+            <Button variant="destructive" onClick={async () => {
+              if (!congregacaoId || !deleteFor) return
+              try {
+                setDeleting(true)
+                await deleteTerritory(congregacaoId, deleteFor)
+                setDeleteFor(null)
+                await refreshTerritories(congregacaoId)
+                toast.success("Território deletado")
+              } catch (e) {
+                toast.error("Falha ao deletar território")
+              } finally {
+                setDeleting(false)
+              }
+            }}>Deletar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

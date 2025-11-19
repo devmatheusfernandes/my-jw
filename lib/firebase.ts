@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, getDocs, serverTimestamp, arrayUnion } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, getDocs, serverTimestamp, arrayUnion, deleteDoc } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 
 const firebaseConfig = {
   apiKey: "AIzaSyBUG9XjV4GivPD1sOnpAqyfo7GQsfd5jHw",
@@ -335,6 +335,24 @@ export const deleteOpenTerritoryRecordForUser = async (congregacaoId: string, te
 export const setTerritoryShareOpen = async (congregacaoId: string, territoryId: string, value: boolean) => {
   const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
   await setDoc(ref, { sharedOpen: value }, { merge: true })
+}
+
+export const deleteTerritoryImage = async (congregacaoId: string, territoryId: string) => {
+  const path = `congregations/${congregacaoId}/territories/${territoryId}`
+  const r = storageRef(storage, path)
+  try {
+    await deleteObject(r)
+  } catch {}
+  const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
+  await setDoc(ref, { imageUrl: null }, { merge: true })
+}
+
+export const deleteTerritory = async (congregacaoId: string, territoryId: string) => {
+  try {
+    await deleteTerritoryImage(congregacaoId, territoryId)
+  } catch {}
+  const ref = doc(db, 'congregations', congregacaoId, 'territory', territoryId)
+  await deleteDoc(ref)
 }
 
 export const signInWithGoogle = async () => {
