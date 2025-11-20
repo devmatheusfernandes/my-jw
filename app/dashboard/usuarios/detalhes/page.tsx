@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { toast } from "sonner"
 import { User, Calendar, Award, Users, Shield, Star, CheckCircle2, XCircle, UserCircle, Edit2, Check, X, Plus, Trash2 } from "lucide-react"
+import { designationLabels, responsibilityLabels } from "@/types/register-labels"
 
 function UsuarioDetalhesPageContent() {
   const params = useSearchParams()
@@ -58,45 +59,6 @@ function UsuarioDetalhesPageContent() {
     run()
   }, [user, params])
 
-  const designationLabels: Record<string, string> = {
-    leitura_biblia: "Leitura da Bíblia",
-    iniciando_conversas: "Iniciando conversas",
-    cultivando_interesse: "Cultivando interesse",
-    fazendo_discipulos: "Fazendo discípulos",
-    explicando_crencas_demonstracao: "Explicando suas crenças (demonstração)",
-    audio_video: "Áudio e vídeo",
-    volante: "Volante",
-    palco: "Palco",
-    explicando_crencas_discurso: "Explicando suas crenças (discurso)",
-    discurso: "Discurso",
-    indicador: "Indicador",
-    discurso_tesouros: "Tesouros da Palavra de Deus",
-    joias_espirituais: "Joias espirituais",
-    leitor_do_estudo: "Leitor do estudo",
-    estudo_biblico_congregacao: "Estudo bíblico de congregação",
-    nossa_vida_crista: "Nossa vida cristã",
-    presidente_meio_semana: "Presidente reunião meio de semana",
-    presidente_fim_semana: "Presidente reunião fim de semana",
-    leitor_sentinela: "Leitor da Sentinela",
-    dirigente_sentinela: "Dirigente da Sentinela",
-  }
-
-  const responsibilityLabels: Record<string, string> = {
-    coordenador: "Coordenador",
-    secretario: "Secretário",
-    superintendente_servico: "Superintendente de serviço",
-    superintendente_audio_video: "Superintendente de áudio e vídeo",
-    superintendente_vida_ministerio: "Superintendente reunião Vida e Ministério",
-    superintendente_discursos_publicos: "Superintendente de discursos públicos",
-    servo_contas: "Servo de contas",
-    servo_publicacoes: "Servo de publicações",
-    servo_carrinho: "Servo do carrinho",
-    servo_territorio: "Servo de território",
-    servo_limpeza: "Servo de limpeza",
-    servo_quadro_anuncios: "Servo de quadro de anúncios",
-    servo_audio_video: "Servo de áudio e vídeo",
-    servo_discursos: "Servo de discursos",
-  }
 
   const formatDesignation = (k: string) => designationLabels[k] || k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
   const formatResponsibility = (k: string) => responsibilityLabels[k] || k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())

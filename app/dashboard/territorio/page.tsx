@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger, DrawerFooter } from "@/components/ui/drawer"
+import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -36,13 +36,7 @@ export default function TerritorioPage() {
   const [eligibleRegisters, setEligibleRegisters] = React.useState<{ registerId: string; nome: string }[]>([])
   const [territories, setTerritories] = React.useState<({ id: string } & TerritoryDoc)[]>([])
 
-  const [openCreate, setOpenCreate] = React.useState(false)
-  const [cidade, setCidade] = React.useState("")
-  const [grupo, setGrupo] = React.useState("")
-  const [codigo, setCodigo] = React.useState("")
-  const [geoJson, setGeoJson] = React.useState("")
-  const [imageFile, setImageFile] = React.useState<File | null>(null)
-  const [creating, setCreating] = React.useState(false)
+  
 
   const [openAddRecordFor, setOpenAddRecordFor] = React.useState<string | null>(null)
   const [startedAt, setStartedAt] = React.useState("")
@@ -84,37 +78,7 @@ export default function TerritorioPage() {
     }
   }, [congregacaoId, refreshTerritories])
 
-  const handleCreateTerritory = async () => {
-    if (!congregacaoId) return
-    try {
-      setCreating(true)
-      const { id } = await createTerritory(congregacaoId, {
-        cidade,
-        grupo,
-        codigo,
-        geoJson: geoJson || undefined,
-      })
-      if (imageFile) {
-        if (imageFile.size > 3 * 1024 * 1024) {
-          toast.error("Imagem acima de 3MB")
-        } else {
-          await uploadTerritoryImage(congregacaoId, id, imageFile)
-        }
-      }
-      setOpenCreate(false)
-      setCidade("")
-      setGrupo("")
-      setCodigo("")
-      setGeoJson("")
-      setImageFile(null)
-      await refreshTerritories(congregacaoId)
-      toast.success("Território criado")
-    } catch (e) {
-      toast.error("Falha ao criar território")
-    } finally {
-      setCreating(false)
-    }
-  }
+  
 
   const handleAddRecord = async () => {
     if (!congregacaoId || !openAddRecordFor) return
@@ -168,41 +132,7 @@ export default function TerritorioPage() {
         <div className="flex items-center gap-2">
           <Input placeholder="Buscar por código, cidade ou grupo" value={search} onChange={(e) => setSearch(e.target.value)} className="w-64" />
         {isAdmin && (
-          <Drawer open={openCreate} onOpenChange={setOpenCreate}>
-            <DrawerTrigger asChild>
-              <Button>Criar território</Button>
-            </DrawerTrigger>
-            <DrawerContent>
-              <DrawerHeader>
-                <DrawerTitle>Criar território</DrawerTitle>
-              </DrawerHeader>
-              <div className="grid gap-4 p-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="cidade">Cidade</Label>
-                  <Input id="cidade" value={cidade} onChange={(e) => setCidade(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="grupo">Grupo</Label>
-                  <Input id="grupo" value={grupo} onChange={(e) => setGrupo(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="codigo">Código</Label>
-                  <Input id="codigo" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="geo">GeoJSON</Label>
-                  <textarea id="geo" className="min-h-24 rounded-md border px-2 py-2" value={geoJson} onChange={(e) => setGeoJson(e.target.value)} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="image">Imagem (até 3MB)</Label>
-                  <input id="image" type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
-                </div>
-              </div>
-              <DrawerFooter>
-                <Button onClick={handleCreateTerritory} disabled={creating || !cidade || !grupo || !codigo}>Criar</Button>
-              </DrawerFooter>
-            </DrawerContent>
-          </Drawer>
+          <Button onClick={() => router.push('/dashboard/territorio/criar')}>Criar território</Button>
         )}
         </div>
       </div>
@@ -233,7 +163,7 @@ export default function TerritorioPage() {
                   )}
                   <div className="p-3">
                     <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium">{t.codigo} — {t.cidade}</div>
+                      <div className="text-sm font-medium">{t.codigo} - {t.cidade}</div>
                       <div className="flex items-center gap-2">
                         {isAdmin && (
                           <DropdownMenu>
@@ -260,7 +190,7 @@ export default function TerritorioPage() {
                         )}
                       </div>
                     </div>
-                    <div className="mt-2 text-xs text-muted-foreground">Registros: {t.registros?.length || 0}</div>
+                    <div className="hidden mt-2 text-xs text-muted-foreground">Registros: {t.registros?.length || 0}</div>
                   </div>
                 </motion.div>
               ))}
