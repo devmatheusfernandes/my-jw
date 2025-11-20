@@ -13,7 +13,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { toast } from "sonner"
 import { User, Calendar, Award, Users, Shield, Star, CheckCircle2, XCircle, UserCircle, Edit2, Check, X, Plus, Trash2 } from "lucide-react"
 
-export default function UsuarioDetalhesPage() {
+function UsuarioDetalhesPageContent() {
   const params = useSearchParams()
   const { user } = useAuth()
   const [loading, setLoading] = React.useState(true)
@@ -675,5 +675,13 @@ export default function UsuarioDetalhesPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function UsuarioDetalhesPage() {
+  return (
+    <React.Suspense fallback={<div className="p-4">Carregando...</div>}>
+      <UsuarioDetalhesPageContent />
+    </React.Suspense>
   )
 }
