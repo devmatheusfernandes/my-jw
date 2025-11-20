@@ -119,6 +119,7 @@ export type CongregationDoc = {
   createdAt?: unknown;
   congregationId?: string;
   accessCode?: string;
+  locaisPregacaoAprovados?: string[];
 };
 
 export type CongregationWithId = { id: string } & CongregationDoc;
@@ -210,6 +211,7 @@ export const updateCongregation = async (
     meioSemanaHora: string
     fimSemanaDia: string
     fimSemanaHora: string
+    locaisPregacaoAprovados: string[]
   }>
 ) => {
   const ref = doc(db, 'congregations', id)
@@ -413,3 +415,47 @@ export const logout = async () => {
     throw error;
   }
 };
+
+export type PregacaoEntry = {
+  hora: string
+  local: string
+  observacoes?: string
+  dirigenteRegisterId?: string
+}
+
+export type PregacaoByDay = {
+  [diaSemana: string]: PregacaoEntry[]
+}
+
+export type PregacaoFixedDoc = {
+  porDia: PregacaoByDay
+  diasAtivos?: string[]
+}
+
+export type PregacaoMonthDoc = {
+  porDia?: PregacaoByDay
+  porDiaSemanas?: { [diaSemana: string]: PregacaoEntry[] }
+  diasAtivos?: string[]
+}
+
+export const getPregacaoFixed = async (congregacaoId: string): Promise<PregacaoFixedDoc | null> => {
+  const ref = doc(db, 'congregations', congregacaoId, 'pregacao', 'fixed')
+  const snap = await getDoc(ref)
+  return snap.exists() ? (snap.data() as PregacaoFixedDoc) : null
+}
+
+export const updatePregacaoFixed = async (congregacaoId: string, data: PregacaoFixedDoc) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'pregacao', 'fixed')
+  await setDoc(ref, data, { merge: true })
+}
+
+export const getPregacaoMonth = async (congregacaoId: string, monthId: string): Promise<PregacaoMonthDoc | null> => {
+  const ref = doc(db, 'congregations', congregacaoId, 'pregacao_month', monthId)
+  const snap = await getDoc(ref)
+  return snap.exists() ? (snap.data() as PregacaoMonthDoc) : null
+}
+
+export const updatePregacaoMonth = async (congregacaoId: string, monthId: string, data: PregacaoMonthDoc) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'pregacao_month', monthId)
+  await setDoc(ref, data, { merge: true })
+}

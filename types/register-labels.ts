@@ -1,5 +1,6 @@
 export const designationLabels: Record<string, string> = {
   leitura_biblia: "Leitura da Bíblia",
+  dirigir_reuniao_de_campo: "Dirigente de Campo",
   iniciando_conversas: "Iniciando conversas",
   cultivando_interesse: "Cultivando interesse",
   fazendo_discipulos: "Fazendo discípulos",

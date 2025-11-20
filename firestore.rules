@@ -8,6 +8,12 @@ service cloud.firestore {
         congregationId is string &&
         get(/databases/$(database)/documents/congregations/$(congregationId)).data.admins.hasAny([request.auth.uid])
     }
+    function isElderOf(congregationId) {
+      return isAuthed() &&
+        congregationId is string &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.registerCongregationId == congregationId &&
+        get(/databases/$(database)/documents/congregations/$(congregationId)/register/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.registerId)).data.privilegioServico == 'anciao'
+    }
 
     match /users/{uid} {
       allow read: if isSelf(uid) || isAdminOf(resource.data.congregacaoId)
@@ -16,7 +22,8 @@ service cloud.firestore {
 
     match /congregations/{id} {
       allow read: if isAuthed()
-      allow write: if isAuthed()
+      allow create: if isAuthed()
+      allow update, delete: if isAdminOf(id) || isElderOf(id)
 
       match /register/{regId} {
         allow read: if isAuthed()
@@ -26,6 +33,16 @@ service cloud.firestore {
       match /territory/{territoryId} {
         allow read: if isAuthed() || resource.data.sharedOpen == true
         allow write: if isAdminOf(id)
+      }
+
+      match /pregacao/{docId} {
+        allow read: if isAuthed()
+        allow write: if isElderOf(id)
+      }
+
+      match /pregacao_month/{monthId} {
+        allow read: if isAuthed()
+        allow write: if isElderOf(id)
       }
     }
   }

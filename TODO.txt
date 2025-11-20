@@ -1,3 +1,0 @@
-Mostrar GeoJSON e mostrar dentro de um mapa que pode expandir e mostrar os limites FEITO
-Ver foto do territorio em tela cheia
-Melhorar UI do codigo inteiro antes de continuar
