@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { MapPin, Home, CalendarDays, Clock, Users, MapPinned, Package, Info, CheckCircle2, XCircle } from "lucide-react"
-import { listTerritories, getUserDoc, closeTerritoryRecordForUser, deleteOpenTerritoryRecordForUser, getPregacaoFixed, getPregacaoMonth, type TerritoryDoc, type PregacaoFixedDoc, type PregacaoMonthDoc, type PregacaoEntry } from "@/lib/firebase"
+import { listTerritories, getUserDoc, closeTerritoryRecordForUser, deleteOpenTerritoryRecordForUser, getPregacaoFixed, getPregacaoMonth, getMidweekAssignmentsMonth, type TerritoryDoc, type PregacaoFixedDoc, type PregacaoMonthDoc, type PregacaoEntry } from "@/lib/firebase"
 
 export default function Page() {
   const { user } = useAuth()
@@ -31,6 +31,9 @@ export default function Page() {
     return `${y}-${m}`
   })
   const [monthlyPregacao, setMonthlyPregacao] = React.useState<PregacaoMonthDoc | null>(null)
+  const [midweekAssignments, setMidweekAssignments] = React.useState<Record<string, any>>({})
+  const [selectedMidweekDate, setSelectedMidweekDate] = React.useState<string>("")
+  const [midweekView, setMidweekView] = React.useState<"semanal" | "mensal">("semanal")
 
   React.useEffect(() => {
     const run = async () => {
@@ -47,6 +50,14 @@ export default function Page() {
         setFixedPregacao(fp)
         const mp = await getPregacaoMonth(u.congregacaoId, monthId)
         setMonthlyPregacao(mp)
+        const am = await getMidweekAssignmentsMonth(u.congregacaoId, monthId)
+        if (am?.weeks) {
+          const m: Record<string, any> = {}
+          Object.entries(am.weeks).forEach(([k, v]) => { m[k.replace(/-/g, "/")] = v })
+          setMidweekAssignments(m)
+        } else {
+          setMidweekAssignments({})
+        }
       } finally {
         setLoading(false)
       }
@@ -62,6 +73,63 @@ export default function Page() {
     }
     loadMonthly()
   }, [congregacaoId, monthId])
+
+  const myMidweekWeeks = React.useMemo(() => {
+    if (!userRegisterId) return [] as { weekDate: string; roles: string[] }[]
+    const keys = [
+      "presidente","oracao_inicial","oracao_final","leitura",
+      "tgw_discurso_orador","tgw_joias_dirigente",
+      "ayf_part1_estudante","ayf_part1_ajudante",
+      "ayf_part2_estudante","ayf_part2_ajudante",
+      "ayf_part3_estudante","ayf_part3_ajudante",
+      "ayf_part4_estudante","ayf_part4_ajudante",
+      "lc_part1_apresentador","lc_part2_apresentador",
+      "lc_cbs_dirigente","lc_cbs_leitor",
+      "lc_superintendente_orador",
+    ]
+    const labelMap: Record<string, string> = {
+      presidente: "Presidente",
+      oracao_inicial: "Oração inicial",
+      oracao_final: "Oração final",
+      leitura: "Leitor",
+      tgw_discurso_orador: "Orador (Tesouros)",
+      tgw_joias_dirigente: "Dirigente (Joias)",
+      ayf_part1_estudante: "AYF Parte 1 — Estudante",
+      ayf_part1_ajudante: "AYF Parte 1 — Ajudante",
+      ayf_part2_estudante: "AYF Parte 2 — Estudante",
+      ayf_part2_ajudante: "AYF Parte 2 — Ajudante",
+      ayf_part3_estudante: "AYF Parte 3 — Estudante",
+      ayf_part3_ajudante: "AYF Parte 3 — Ajudante",
+      ayf_part4_estudante: "AYF Parte 4 — Estudante",
+      ayf_part4_ajudante: "AYF Parte 4 — Ajudante",
+      lc_part1_apresentador: "Nossa vida cristã — Parte 1",
+      lc_part2_apresentador: "Nossa vida cristã — Parte 2",
+      lc_cbs_dirigente: "Estudo bíblico — Dirigente",
+      lc_cbs_leitor: "Estudo bíblico — Leitor",
+      lc_superintendente_orador: "Orador (Superintendente)",
+    }
+    const parse = (wd: string) => {
+      const [y,m,d] = wd.split("/").map(x=>parseInt(x,10)); return new Date(y, m-1, d).getTime()
+    }
+    const out: { weekDate: string; roles: string[] }[] = []
+    Object.entries(midweekAssignments).forEach(([wd, a]) => {
+      const roles = keys.filter(k => a && a[k] && a[k] === userRegisterId).map(k => labelMap[k])
+      if (roles.length > 0) out.push({ weekDate: wd, roles })
+    })
+    return out.sort((a,b)=>parse(a.weekDate)-parse(b.weekDate))
+  }, [midweekAssignments, userRegisterId])
+
+  React.useEffect(() => {
+    if (myMidweekWeeks.length === 0) { setSelectedMidweekDate(""); return }
+    const now = new Date()
+    const match = myMidweekWeeks.find(w => {
+      const [y,m,d] = w.weekDate.split("/").map(x=>parseInt(x,10))
+      const wd = new Date(y, m-1, d)
+      const diff = now.getTime() - wd.getTime()
+      return diff >= 0 && diff < 7 * 86400000
+    })
+    setSelectedMidweekDate(match ? match.weekDate : myMidweekWeeks[0].weekDate)
+  }, [myMidweekWeeks])
 
   const myOpenAssignments = React.useMemo(() => {
     if (!uid) return [] as ({ id: string } & TerritoryDoc)[]
@@ -398,6 +466,96 @@ export default function Page() {
               </div>
             </div>
           </div>
+        </motion.div>
+
+        <Separator />
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-primary" />
+              <h2 className="text-xl font-semibold">Minhas Designações — Meio de Semana</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="midweekMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
+              <Input id="midweekMonthId" type="month" value={monthId} onChange={(e)=>setMonthId(e.target.value)} className="h-8 w-36 text-xs" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant={midweekView==='semanal'?'default':'outline'} onClick={()=>setMidweekView('semanal')}>Semanal</Button>
+            <Button size="sm" variant={midweekView==='mensal'?'default':'outline'} onClick={()=>setMidweekView('mensal')}>Mensal</Button>
+          </div>
+
+          {midweekView === 'semanal' ? (
+            <div className="space-y-4">
+              {myMidweekWeeks.length === 0 ? (
+                <div className="text-center py-12 rounded-lg border bg-muted/30">
+                  <CalendarDays className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Nenhuma designação neste mês</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                    {myMidweekWeeks.map((w) => (
+                      <Button
+                        key={w.weekDate}
+                        variant={selectedMidweekDate === w.weekDate ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedMidweekDate(w.weekDate)}
+                        className="whitespace-nowrap flex-shrink-0"
+                      >
+                        {(() => { const [y,m,d] = w.weekDate.split('/'); return `${d}/${m}` })()}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="rounded-lg border bg-card p-4">
+                    {myMidweekWeeks.filter(w=>w.weekDate===selectedMidweekDate).map((w)=> (
+                      <div key={w.weekDate} className="space-y-2">
+                        <div className="text-sm font-semibold">{selectedMidweekDate.replace(/\//g, '-')}</div>
+                        <ul className="text-sm space-y-1">
+                          {w.roles.map((r,i)=> (<li key={i} className="flex items-center gap-2">• <span>{r}</span></li>))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {myMidweekWeeks.length === 0 ? (
+                <div className="text-center py-12 rounded-lg border bg-muted/30">
+                  <CalendarDays className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Nenhuma designação neste mês</p>
+                </div>
+              ) : (
+                myMidweekWeeks.map((w, idx) => (
+                  <motion.div
+                    key={w.weekDate}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    className="rounded-md bg-muted/50 p-3 space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <div className="font-medium text-sm">Semana {w.weekDate.replace(/\//g, '-')}</div>
+                      </div>
+                    </div>
+                    <ul className="text-sm space-y-1">
+                      {w.roles.map((r,i)=> (<li key={i} className="flex items-center gap-2">• <span>{r}</span></li>))}
+                    </ul>
+                  </motion.div>
+                ))
+              )}
+            </div>
+          )}
         </motion.div>
       </div>
 

@@ -244,14 +244,17 @@ export const getMidweekAssignmentsMonth = async (congregacaoId: string, monthId:
 
 export const updateMidweekAssignmentsMonth = async (congregacaoId: string, monthId: string, weeks: Record<string, any>) => {
   const ref = doc(db, 'congregations', congregacaoId, 'midweek_assign', monthId)
-  const clean = JSON.parse(JSON.stringify(weeks || {}))
+  const cleanIn = JSON.parse(JSON.stringify(weeks || {})) as Record<string, any>
+  const clean: Record<string, any> = {}
+  Object.keys(cleanIn).forEach((k) => { clean[k.replace(/\//g, '-')] = cleanIn[k] })
   await setDoc(ref, { weeks: clean, updatedAt: serverTimestamp() }, { merge: true })
 }
 
 export const updateMidweekAssignmentsWeek = async (congregacaoId: string, monthId: string, weekDate: string, data: Record<string, any>) => {
   const ref = doc(db, 'congregations', congregacaoId, 'midweek_assign', monthId)
   const clean = JSON.parse(JSON.stringify(data || {}))
-  await setDoc(ref, { [`weeks.${weekDate}`]: clean, updatedAt: serverTimestamp() }, { merge: true })
+  const key = (weekDate || '').replace(/\//g, '-')
+  await setDoc(ref, { weeks: { [key]: clean }, updatedAt: serverTimestamp() }, { merge: true })
 }
 
 export const listUsersByCongregation = async (congregacaoId: string): Promise<(UserDoc & { uid: string })[]> => {

@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { ChevronDown, ChevronsUpDown, CalendarDays, Users, Settings, Save, Download, Music, Book, Award, Clock, UserCircle, AlertCircle, Edit3, Check, X } from 'lucide-react'
-import { getUserDoc, listRegisters, upsertMidweekScheduleMonth, getMidweekScheduleMonth, getMidweekAssignmentsMonth, updateMidweekAssignmentsMonth } from '@/lib/firebase'
+import { getUserDoc, listRegisters, upsertMidweekScheduleMonth, getMidweekScheduleMonth, getMidweekAssignmentsMonth, updateMidweekAssignmentsMonth, updateMidweekAssignmentsWeek } from '@/lib/firebase'
 import { toast } from 'sonner'
 import { designationLabels } from '@/types/register-labels'
 
@@ -91,6 +91,9 @@ export default function MidweekPage() {
   const [congregacaoId, setCongregacaoId] = React.useState<string | null>(null)
   const regById = React.useMemo(() => new Map(registers.map(r => [r.id, r.nomeCompleto])), [registers])
   const [assignByWeek, setAssignByWeek] = React.useState<Record<string, MidweekAssignmentsDisplay>>({})
+  const assignByWeekRef = React.useRef(assignByWeek)
+  React.useEffect(() => { assignByWeekRef.current = assignByWeek }, [assignByWeek])
+  const saveTimersRef = React.useRef<Map<string, any>>(new Map())
   const [editingWeek, setEditingWeek] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [importOpen, setImportOpen] = React.useState(false)
@@ -172,7 +175,10 @@ export default function MidweekPage() {
         }
         const doc = await getMidweekAssignmentsMonth(congregacaoId, monthId)
         if (doc?.weeks) {
-          setAssignByWeek(doc.weeks as Record<string, MidweekAssignmentsDisplay>)
+          const fromDb = doc.weeks as Record<string, MidweekAssignmentsDisplay>
+          const normalized: Record<string, MidweekAssignmentsDisplay> = {}
+          Object.entries(fromDb).forEach(([k, v]) => { normalized[k.replace(/-/g, '/')] = v })
+          setAssignByWeek(normalized)
           return
         }
         const raw = localStorage.getItem(assignKey)
@@ -199,9 +205,48 @@ export default function MidweekPage() {
     }
   }, [assignKey, assignByWeek, congregacaoId, monthId])
 
+  const persistWeek = React.useCallback(async (weekDate: string) => {
+    try {
+      localStorage.setItem(assignKey, JSON.stringify(assignByWeekRef.current))
+      if (!congregacaoId) return
+      const data = assignByWeekRef.current[weekDate] || {}
+      await updateMidweekAssignmentsWeek(congregacaoId, monthId, weekDate, data)
+      toast.success('Semana salva', { duration: 1200 })
+    } catch (e: any) {
+      const msg = (e && (e.message || e.toString())) || 'Falha ao salvar semana'
+      toast.error(msg)
+    }
+  }, [assignKey, congregacaoId, monthId])
+
+  const scheduleSaveWeek = React.useCallback(async (weekDate: string, data: MidweekAssignmentsDisplay) => {
+    try {
+      const t = saveTimersRef.current.get(weekDate)
+      if (t) { clearTimeout(t); saveTimersRef.current.delete(weekDate) }
+      const handle = setTimeout(async () => {
+        try {
+          localStorage.setItem(assignKey, JSON.stringify(assignByWeekRef.current))
+          if (congregacaoId) {
+            await updateMidweekAssignmentsWeek(congregacaoId, monthId, weekDate, data)
+            toast.success('Semana salva', { duration: 1200 })
+          }
+        } catch (e: any) {
+          const msg = (e && (e.message || e.toString())) || 'Falha ao salvar semana'
+          toast.error(msg)
+        }
+      }, 800)
+      saveTimersRef.current.set(weekDate, handle)
+    } catch {}
+  }, [assignKey, congregacaoId, monthId])
+
   const updateAssign = React.useCallback((weekDate: string, field: keyof MidweekAssignmentsDisplay, value: string | undefined) => {
-    setAssignByWeek(curr => ({ ...curr, [weekDate]: { ...(curr[weekDate] || {}), [field]: value } }))
-  }, [])
+    setAssignByWeek(curr => {
+      const nextWeek = { ...(curr[weekDate] || {}), [field]: value }
+      const next = { ...curr, [weekDate]: nextWeek }
+      assignByWeekRef.current = next
+      scheduleSaveWeek(weekDate, nextWeek)
+      return next
+    })
+  }, [scheduleSaveWeek])
 
   const monthsBetween = React.useCallback((start: string, end: string) => {
     if (!start || !end) return 0
@@ -345,7 +390,7 @@ export default function MidweekPage() {
             <Button
               variant={isEditing ? "default" : "ghost"}
               size="sm"
-              onClick={() => setEditingWeek(isEditing ? null : w.week_date)}
+              onClick={() => { if (isEditing) persistWeek(w.week_date); setEditingWeek(isEditing ? null : w.week_date) }}
               className="gap-1.5 h-8 px-2 text-xs"
             >
               {isEditing ? (
@@ -694,14 +739,6 @@ export default function MidweekPage() {
                   </Button>
                 </PopoverContent>
               </Popover>
-              <Button
-                size="sm"
-                onClick={persistAssign}
-                className="gap-2"
-              >
-                <Save className="h-4 w-4" />
-                <span className="hidden sm:inline">Salvar tudo</span>
-              </Button>
             </div>
           </div>
         </motion.div>

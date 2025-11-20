@@ -21,6 +21,10 @@ const data = {
     { title: "Congregação", url: "/dashboard/congregacao", icon: Users },
     { title: "Território", url: "/dashboard/territorio", icon: Map },
     { title: "Pregação", url: "/dashboard/pregacao", icon: Calendar },
+    { title: "Reuniões", url: "/dashboard/reuniao/meio-de-semana", icon: Calendar, items: [
+      { title: "Fim de semana", url: "/dashboard/reuniao/fim-de-semana" },
+      { title: "Meio de semana", url: "/dashboard/reuniao/meio-de-semana" },
+    ] },
     { title: "Usuários", url: "/dashboard/usuarios", icon: Users },
     { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
   ],
