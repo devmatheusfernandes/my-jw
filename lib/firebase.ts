@@ -127,6 +127,12 @@ export type RegisterDoc = {
   nomeCompleto: string
   nascimento?: string
   batismo?: string
+  sexo?: 'homem' | 'mulher'
+  status?: 'publicador_nao_batizado' | 'publicador_batizado'
+  privilegioServico?: 'servo_ministerial' | 'anciao' | null
+  outrosPrivilegios?: { pioneiroAuxiliar?: boolean; pioneiroRegular?: boolean }
+  designacoesAprovadas?: string[]
+  responsabilidades?: string[]
   createdAt?: unknown
 }
 
@@ -227,7 +233,20 @@ export const listRegisters = async (congregacaoId: string): Promise<({ id: strin
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as RegisterDoc) }))
 }
 
-export const createRegister = async (congregacaoId: string, data: { nomeCompleto: string; nascimento?: string; batismo?: string }) => {
+export const createRegister = async (
+  congregacaoId: string,
+  data: {
+    nomeCompleto: string
+    nascimento?: string
+    batismo?: string
+    sexo?: 'homem' | 'mulher'
+    status?: 'publicador_nao_batizado' | 'publicador_batizado'
+    privilegioServico?: 'servo_ministerial' | 'anciao' | null
+    outrosPrivilegios?: { pioneiroAuxiliar?: boolean; pioneiroRegular?: boolean }
+    designacoesAprovadas?: string[]
+    responsabilidades?: string[]
+  }
+) => {
   const ref = await addDoc(collection(db, 'congregations', congregacaoId, 'register'), {
     ...data,
     createdAt: serverTimestamp(),
@@ -235,9 +254,29 @@ export const createRegister = async (congregacaoId: string, data: { nomeCompleto
   return { id: ref.id }
 }
 
-export const updateRegister = async (congregacaoId: string, registerId: string, data: Partial<{ nomeCompleto: string; nascimento?: string; batismo?: string }>) => {
+export const updateRegister = async (
+  congregacaoId: string,
+  registerId: string,
+  data: Partial<{
+    nomeCompleto: string
+    nascimento?: string
+    batismo?: string
+    sexo?: 'homem' | 'mulher'
+    status?: 'publicador_nao_batizado' | 'publicador_batizado'
+    privilegioServico?: 'servo_ministerial' | 'anciao' | null
+    outrosPrivilegios?: { pioneiroAuxiliar?: boolean; pioneiroRegular?: boolean }
+    designacoesAprovadas?: string[]
+    responsabilidades?: string[]
+  }>
+) => {
   const ref = doc(db, 'congregations', congregacaoId, 'register', registerId)
   await setDoc(ref, data, { merge: true })
+}
+
+export const getRegisterDoc = async (congregacaoId: string, registerId: string): Promise<({ id: string } & RegisterDoc) | null> => {
+  const ref = doc(db, 'congregations', congregacaoId, 'register', registerId)
+  const snap = await getDoc(ref)
+  return snap.exists() ? ({ id: snap.id, ...(snap.data() as RegisterDoc) }) : null
 }
 
 export const attachUserToRegister = async (uid: string, congregacaoId: string, registerId: string) => {
