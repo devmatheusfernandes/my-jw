@@ -45,5 +45,10 @@ service cloud.firestore {
         allow write: if isElderOf(id)
       }
     }
+
+    match /global_midweek_schedule_pt/{monthId} {
+      allow read: if isAuthed()
+      allow write: if isAdminOf(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.congregacaoId) || isElderOf(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.registerCongregationId)
+    }
   }
 }

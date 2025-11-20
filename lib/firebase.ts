@@ -218,6 +218,22 @@ export const updateCongregation = async (
   await setDoc(ref, data, { merge: true })
 }
 
+export type MidweekScheduleMonthDoc = { weeks: any[]; updatedAt?: unknown; sourceUrl?: string }
+
+export const getMidweekScheduleMonth = async (monthId: string): Promise<MidweekScheduleMonthDoc | null> => {
+  const ref = doc(db, 'global_midweek_schedule_pt', monthId)
+  const snap = await getDoc(ref)
+  return snap.exists() ? (snap.data() as MidweekScheduleMonthDoc) : null
+}
+
+export const upsertMidweekScheduleMonth = async (monthId: string, weeks: any[], sourceUrl?: string) => {
+  const ref = doc(db, 'global_midweek_schedule_pt', monthId)
+  const cleanWeeks = Array.isArray(weeks)
+    ? weeks.map((w) => JSON.parse(JSON.stringify(w)))
+    : []
+  await setDoc(ref, { weeks: cleanWeeks, updatedAt: serverTimestamp(), ...(sourceUrl ? { sourceUrl } : {}) }, { merge: true })
+}
+
 export const listUsersByCongregation = async (congregacaoId: string): Promise<(UserDoc & { uid: string })[]> => {
   const q = query(collection(db, 'users'), where('congregacaoId', '==', congregacaoId))
   const snap = await getDocs(q)
