@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { ChevronDown, ChevronsUpDown, CalendarDays, Users, Settings, Save, Download, Music, Book, Award, Clock, UserCircle, AlertCircle, Edit3, Check, X } from 'lucide-react'
-import { getUserDoc, listRegisters, upsertMidweekScheduleMonth, getMidweekScheduleMonth } from '@/lib/firebase'
+import { getUserDoc, listRegisters, upsertMidweekScheduleMonth, getMidweekScheduleMonth, getMidweekAssignmentsMonth, updateMidweekAssignmentsMonth } from '@/lib/firebase'
 import { toast } from 'sonner'
 import { designationLabels } from '@/types/register-labels'
 
@@ -88,6 +88,7 @@ export default function MidweekPage() {
   })
   const [selectedWeekDate, setSelectedWeekDate] = React.useState<string>('')
   const [registers, setRegisters] = React.useState<RegisterOpt[]>([])
+  const [congregacaoId, setCongregacaoId] = React.useState<string | null>(null)
   const regById = React.useMemo(() => new Map(registers.map(r => [r.id, r.nomeCompleto])), [registers])
   const [assignByWeek, setAssignByWeek] = React.useState<Record<string, MidweekAssignmentsDisplay>>({})
   const [editingWeek, setEditingWeek] = React.useState<string | null>(null)
@@ -131,6 +132,7 @@ export default function MidweekPage() {
       if (!uid) return
       const u = await getUserDoc(uid)
       if (!u?.congregacaoId) return
+      setCongregacaoId(u.congregacaoId)
       const regs = await listRegisters(u.congregacaoId)
       setRegisters(regs.map(r => ({ id: r.id, nomeCompleto: r.nomeCompleto })))
     }
@@ -160,18 +162,42 @@ export default function MidweekPage() {
   const assignKey = React.useMemo(() => `midweek_assign_${monthId}`, [monthId])
   
   React.useEffect(() => {
-    try {
-      const raw = localStorage.getItem(assignKey)
-      if (raw) setAssignByWeek(JSON.parse(raw))
-      else setAssignByWeek({})
-    } catch {
-      setAssignByWeek({})
+    const run = async () => {
+      try {
+        if (!congregacaoId) {
+          const raw = localStorage.getItem(assignKey)
+          if (raw) setAssignByWeek(JSON.parse(raw))
+          else setAssignByWeek({})
+          return
+        }
+        const doc = await getMidweekAssignmentsMonth(congregacaoId, monthId)
+        if (doc?.weeks) {
+          setAssignByWeek(doc.weeks as Record<string, MidweekAssignmentsDisplay>)
+          return
+        }
+        const raw = localStorage.getItem(assignKey)
+        if (raw) setAssignByWeek(JSON.parse(raw))
+        else setAssignByWeek({})
+      } catch {
+        const raw = localStorage.getItem(assignKey)
+        if (raw) setAssignByWeek(JSON.parse(raw))
+        else setAssignByWeek({})
+      }
     }
-  }, [assignKey])
+    run()
+  }, [assignKey, congregacaoId, monthId])
 
-  const persistAssign = React.useCallback(() => {
-    localStorage.setItem(assignKey, JSON.stringify(assignByWeek))
-  }, [assignKey, assignByWeek])
+  const persistAssign = React.useCallback(async () => {
+    try {
+      localStorage.setItem(assignKey, JSON.stringify(assignByWeek))
+      if (!congregacaoId) throw new Error('Sem congregação')
+      await updateMidweekAssignmentsMonth(congregacaoId, monthId, assignByWeek)
+      toast.success('Designações salvas')
+    } catch (e: any) {
+      const msg = (e && (e.message || e.toString())) || 'Falha ao salvar designações'
+      toast.error(msg)
+    }
+  }, [assignKey, assignByWeek, congregacaoId, monthId])
 
   const updateAssign = React.useCallback((weekDate: string, field: keyof MidweekAssignmentsDisplay, value: string | undefined) => {
     setAssignByWeek(curr => ({ ...curr, [weekDate]: { ...(curr[weekDate] || {}), [field]: value } }))

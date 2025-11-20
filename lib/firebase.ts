@@ -234,6 +234,26 @@ export const upsertMidweekScheduleMonth = async (monthId: string, weeks: any[], 
   await setDoc(ref, { weeks: cleanWeeks, updatedAt: serverTimestamp(), ...(sourceUrl ? { sourceUrl } : {}) }, { merge: true })
 }
 
+export type MidweekAssignMonthDoc = { weeks?: Record<string, any>; updatedAt?: unknown }
+
+export const getMidweekAssignmentsMonth = async (congregacaoId: string, monthId: string): Promise<MidweekAssignMonthDoc | null> => {
+  const ref = doc(db, 'congregations', congregacaoId, 'midweek_assign', monthId)
+  const snap = await getDoc(ref)
+  return snap.exists() ? (snap.data() as MidweekAssignMonthDoc) : null
+}
+
+export const updateMidweekAssignmentsMonth = async (congregacaoId: string, monthId: string, weeks: Record<string, any>) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'midweek_assign', monthId)
+  const clean = JSON.parse(JSON.stringify(weeks || {}))
+  await setDoc(ref, { weeks: clean, updatedAt: serverTimestamp() }, { merge: true })
+}
+
+export const updateMidweekAssignmentsWeek = async (congregacaoId: string, monthId: string, weekDate: string, data: Record<string, any>) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'midweek_assign', monthId)
+  const clean = JSON.parse(JSON.stringify(data || {}))
+  await setDoc(ref, { [`weeks.${weekDate}`]: clean, updatedAt: serverTimestamp() }, { merge: true })
+}
+
 export const listUsersByCongregation = async (congregacaoId: string): Promise<(UserDoc & { uid: string })[]> => {
   const q = query(collection(db, 'users'), where('congregacaoId', '==', congregacaoId))
   const snap = await getDocs(q)

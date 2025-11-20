@@ -50,5 +50,10 @@ service cloud.firestore {
       allow read: if isAuthed()
       allow write: if isAdminOf(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.congregacaoId) || isElderOf(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.registerCongregationId)
     }
+
+    match /congregations/{id}/midweek_assign/{monthId} {
+      allow read: if isAuthed()
+      allow write: if isAdminOf(id) || isElderOf(id)
+    }
   }
 }
