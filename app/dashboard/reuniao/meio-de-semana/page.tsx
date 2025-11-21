@@ -3,7 +3,7 @@ import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MidweekIncomingType, MidweekAssignmentsDisplay, WeekType } from './MidweekSimple'
 import { mapMidweekToDesignations } from '@/types/midweek-meeting'
-import { useAuth } from '@/components/providers/auth-provider'
+import { useMidweekMeeting, WEEK_TYPES, normalizeAyfKey, monthsBetween } from './utils-midweek-meeting'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,294 +12,40 @@ import { Separator } from '@/components/ui/separator'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { ChevronDown, ChevronsUpDown, CalendarDays, Users, Settings, Save, Download, Music, Book, Award, Clock, UserCircle, AlertCircle, Edit3, Check, X } from 'lucide-react'
-import { getUserDoc, listRegisters, upsertMidweekScheduleMonth, getMidweekScheduleMonth, getMidweekAssignmentsMonth, updateMidweekAssignmentsMonth, updateMidweekAssignmentsWeek } from '@/lib/firebase'
-import { toast } from 'sonner'
 import { designationLabels } from '@/types/register-labels'
 
-type RegisterOpt = { id: string; nomeCompleto: string }
-
-const removeDiacritics = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '')
-
-const normalizeAyfKey = (type?: string, title?: string, content?: string): keyof typeof designationLabels | undefined => {
-  if (!type) return undefined
-  const t = removeDiacritics(type.toLowerCase())
-  const ttl = removeDiacritics((title || '').toLowerCase())
-  const cnt = removeDiacritics((content || '').toLowerCase())
-
-  if (t.includes('iniciando')) return 'iniciando_conversas'
-  if (t.includes('cultivando')) return 'cultivando_interesse'
-  if (t.includes('fazendo')) return 'fazendo_discipulos'
-  if (t.includes('explicando')) {
-    if (ttl.includes('discurso')) return 'explicando_crencas_discurso'
-    if (cnt.includes('demonstr') || ttl.includes('demonstr')) return 'explicando_crencas_demonstracao'
-    return 'explicando_crencas_demonstracao'
-  }
-  return undefined
-}
-
-const mapMidweek = (item: any): MidweekIncomingType => ({
-  week_date: item.mwb_week_date || item.week_date,
-  mwb_week_date: item.mwb_week_date,
-  mwb_week_date_locale: item.mwb_week_date_locale,
-  mwb_weekly_bible_reading: item.mwb_weekly_bible_reading,
-  mwb_song_first: item.mwb_song_first,
-  mwb_tgw_talk_title: item.mwb_tgw_talk_title,
-  mwb_tgw_gems_title: item.mwb_tgw_gems_title,
-  mwb_tgw_bread: item.mwb_tgw_bread,
-  mwb_tgw_bread_title: item.mwb_tgw_bread_title,
-  mwb_ayf_count: item.mwb_ayf_count,
-  mwb_ayf_part1_type: item.mwb_ayf_part1_type,
-  mwb_ayf_part1_time: item.mwb_ayf_part1_time,
-  mwb_ayf_part1_title: item.mwb_ayf_part1_title,
-  mwb_ayf_part1: item.mwb_ayf_part1,
-  mwb_ayf_part2_type: item.mwb_ayf_part2_type,
-  mwb_ayf_part2_time: item.mwb_ayf_part2_time,
-  mwb_ayf_part2_title: item.mwb_ayf_part2_title,
-  mwb_ayf_part2: item.mwb_ayf_part2,
-  mwb_ayf_part3_type: item.mwb_ayf_part3_type,
-  mwb_ayf_part3_time: item.mwb_ayf_part3_time,
-  mwb_ayf_part3_title: item.mwb_ayf_part3_title,
-  mwb_ayf_part3: item.mwb_ayf_part3,
-  mwb_ayf_part4_type: item.mwb_ayf_part4_type,
-  mwb_ayf_part4_time: item.mwb_ayf_part4_time,
-  mwb_ayf_part4_title: item.mwb_ayf_part4_title,
-  mwb_ayf_part4: item.mwb_ayf_part4,
-  mwb_song_middle: item.mwb_song_middle,
-  mwb_lc_count: item.mwb_lc_count,
-  mwb_lc_part1_time: item.mwb_lc_part1_time,
-  mwb_lc_part1_title: item.mwb_lc_part1_title,
-  mwb_lc_part1_content: item.mwb_lc_part1_content,
-  mwb_lc_part2_time: item.mwb_lc_part2_time,
-  mwb_lc_part2_title: item.mwb_lc_part2_title,
-  mwb_lc_part2_content: item.mwb_lc_part2_content,
-  mwb_lc_cbs: item.mwb_lc_cbs,
-  mwb_lc_cbs_title: item.mwb_lc_cbs_title,
-  mwb_song_conclude: item.mwb_song_conclude,
-})
-
 export default function MidweekPage() {
-  const { user } = useAuth()
-  const [weeks, setWeeks] = React.useState<MidweekIncomingType[]>([])
-  const [monthId, setMonthId] = React.useState<string>(() => {
-    const now = new Date()
-    const y = now.getFullYear()
-    const m = String(now.getMonth() + 1).padStart(2, '0')
-    return `${y}-${m}`
-  })
-  const [selectedWeekDate, setSelectedWeekDate] = React.useState<string>('')
-  const [registers, setRegisters] = React.useState<RegisterOpt[]>([])
-  const [congregacaoId, setCongregacaoId] = React.useState<string | null>(null)
-  const regById = React.useMemo(() => new Map(registers.map(r => [r.id, r.nomeCompleto])), [registers])
-  const [assignByWeek, setAssignByWeek] = React.useState<Record<string, MidweekAssignmentsDisplay>>({})
-  const assignByWeekRef = React.useRef(assignByWeek)
-  React.useEffect(() => { assignByWeekRef.current = assignByWeek }, [assignByWeek])
-  const saveTimersRef = React.useRef<Map<string, any>>(new Map())
-  const [editingWeek, setEditingWeek] = React.useState<string | null>(null)
-  const [loading, setLoading] = React.useState(true)
+  const {
+    weeks,
+    setWeeks,
+    monthId,
+    setMonthId,
+    selectedWeekDate,
+    setSelectedWeekDate,
+    registers,
+    regById,
+    congregacaoId,
+    assignByWeek,
+    updateAssign,
+    persistWeek,
+    editingWeek,
+    setEditingWeek,
+    loading,
+    handleImport,
+    importLoading,
+    monthWeeks,
+    prevWeekDate,
+    collectWeekIds,
+  } = useMidweekMeeting()
   const [importOpen, setImportOpen] = React.useState(false)
   const [importStart, setImportStart] = React.useState<string>('')
   const [importEnd, setImportEnd] = React.useState<string>('')
-  const [importLoading, setImportLoading] = React.useState(false)
   const [importLang, setImportLang] = React.useState<'P' | 'E' | 'T'>('T')
 
-  React.useEffect(() => {
-    const run = async () => {
-      try {
-        setLoading(true)
-        const doc = await getMidweekScheduleMonth(monthId)
-        if (doc?.weeks && Array.isArray(doc.weeks) && doc.weeks.length > 0) {
-          setWeeks(doc.weeks as MidweekIncomingType[])
-          return
-        }
-        const resp = await fetch('/midweek_pt.json')
-        const list = await resp.json()
-        setWeeks(list as MidweekIncomingType[])
-      } catch {
-        try {
-          const resp = await fetch('/midweek_pt.json')
-          const list = await resp.json()
-          setWeeks(list as MidweekIncomingType[])
-        } catch {
-          toast.error('Falha ao carregar programação')
-        }
-      } finally {
-        setLoading(false)
-      }
-    }
-    run()
-  }, [monthId])
-
-  React.useEffect(() => {
-    const run = async () => {
-      const uid = user?.uid
-      if (!uid) return
-      const u = await getUserDoc(uid)
-      if (!u?.congregacaoId) return
-      setCongregacaoId(u.congregacaoId)
-      const regs = await listRegisters(u.congregacaoId)
-      setRegisters(regs.map(r => ({ id: r.id, nomeCompleto: r.nomeCompleto })))
-    }
-    run()
-  }, [user])
-
-  const monthWeeks = React.useMemo(() => {
-    const [y, m] = monthId.split('-').map(x => parseInt(x, 10))
-    return weeks.filter(w => {
-      const [wy, wm] = w.week_date.split('/').map(x => parseInt(x, 10))
-      return wy === y && wm === m
-    })
-  }, [weeks, monthId])
-
-  React.useEffect(() => {
-    if (monthWeeks.length === 0) return
-    const now = new Date()
-    const match = monthWeeks.find(w => {
-      const [y, m, d] = w.week_date.split('/').map(x => parseInt(x, 10))
-      const wd = new Date(y, m - 1, d)
-      const diff = now.getTime() - wd.getTime()
-      return diff >= 0 && diff < 7 * 86400000
-    })
-    setSelectedWeekDate(match ? match.week_date : monthWeeks[0].week_date)
-  }, [monthWeeks])
-
-  const assignKey = React.useMemo(() => `midweek_assign_${monthId}`, [monthId])
-  
-  React.useEffect(() => {
-    const run = async () => {
-      try {
-        if (!congregacaoId) {
-          const raw = localStorage.getItem(assignKey)
-          if (raw) setAssignByWeek(JSON.parse(raw))
-          else setAssignByWeek({})
-          return
-        }
-        const doc = await getMidweekAssignmentsMonth(congregacaoId, monthId)
-        if (doc?.weeks) {
-          const fromDb = doc.weeks as Record<string, MidweekAssignmentsDisplay>
-          const normalized: Record<string, MidweekAssignmentsDisplay> = {}
-          Object.entries(fromDb).forEach(([k, v]) => { normalized[k.replace(/-/g, '/')] = v })
-          setAssignByWeek(normalized)
-          return
-        }
-        const raw = localStorage.getItem(assignKey)
-        if (raw) setAssignByWeek(JSON.parse(raw))
-        else setAssignByWeek({})
-      } catch {
-        const raw = localStorage.getItem(assignKey)
-        if (raw) setAssignByWeek(JSON.parse(raw))
-        else setAssignByWeek({})
-      }
-    }
-    run()
-  }, [assignKey, congregacaoId, monthId])
-
-  const persistAssign = React.useCallback(async () => {
-    try {
-      localStorage.setItem(assignKey, JSON.stringify(assignByWeek))
-      if (!congregacaoId) throw new Error('Sem congregação')
-      await updateMidweekAssignmentsMonth(congregacaoId, monthId, assignByWeek)
-      toast.success('Designações salvas')
-    } catch (e: any) {
-      const msg = (e && (e.message || e.toString())) || 'Falha ao salvar designações'
-      toast.error(msg)
-    }
-  }, [assignKey, assignByWeek, congregacaoId, monthId])
-
-  const persistWeek = React.useCallback(async (weekDate: string) => {
-    try {
-      localStorage.setItem(assignKey, JSON.stringify(assignByWeekRef.current))
-      if (!congregacaoId) return
-      const data = assignByWeekRef.current[weekDate] || {}
-      await updateMidweekAssignmentsWeek(congregacaoId, monthId, weekDate, data)
-      toast.success('Semana salva', { duration: 1200 })
-    } catch (e: any) {
-      const msg = (e && (e.message || e.toString())) || 'Falha ao salvar semana'
-      toast.error(msg)
-    }
-  }, [assignKey, congregacaoId, monthId])
-
-  const scheduleSaveWeek = React.useCallback(async (weekDate: string, data: MidweekAssignmentsDisplay) => {
-    try {
-      const t = saveTimersRef.current.get(weekDate)
-      if (t) { clearTimeout(t); saveTimersRef.current.delete(weekDate) }
-      const handle = setTimeout(async () => {
-        try {
-          localStorage.setItem(assignKey, JSON.stringify(assignByWeekRef.current))
-          if (congregacaoId) {
-            await updateMidweekAssignmentsWeek(congregacaoId, monthId, weekDate, data)
-            toast.success('Semana salva', { duration: 1200 })
-          }
-        } catch (e: any) {
-          const msg = (e && (e.message || e.toString())) || 'Falha ao salvar semana'
-          toast.error(msg)
-        }
-      }, 800)
-      saveTimersRef.current.set(weekDate, handle)
-    } catch {}
-  }, [assignKey, congregacaoId, monthId])
-
-  const updateAssign = React.useCallback((weekDate: string, field: keyof MidweekAssignmentsDisplay, value: string | undefined) => {
-    setAssignByWeek(curr => {
-      const nextWeek = { ...(curr[weekDate] || {}), [field]: value }
-      const next = { ...curr, [weekDate]: nextWeek }
-      assignByWeekRef.current = next
-      scheduleSaveWeek(weekDate, nextWeek)
-      return next
-    })
-  }, [scheduleSaveWeek])
-
-  const monthsBetween = React.useCallback((start: string, end: string) => {
-    if (!start || !end) return 0
-    const [sy, sm] = start.split('-').map(x => parseInt(x,10))
-    const [ey, em] = end.split('-').map(x => parseInt(x,10))
-    return (ey - sy) * 12 + (em - sm) + 1
-  }, [])
-
-  const handleImport = React.useCallback(async () => {
-    if (!importStart || !importEnd) return
-    if (monthsBetween(importStart, importEnd) < 2) return
-    setImportLoading(true)
-    try {
-      const resp = await fetch(`https://source-materials.organized-app.com/api/${importLang}`)
-      const raw = await resp.json()
-      let arr: MidweekIncomingType[] = (Array.isArray(raw) ? raw : [])
-        .filter((x: any) => x && typeof x === 'object' && 'mwb_week_date_locale' in x)
-        .map(mapMidweek)
-
-      const startStr = `${importStart.replace('-', '/')}/01`
-      const endStr = `${importEnd.replace('-', '/')}/31`
-      arr = arr.filter(w => typeof w.week_date === 'string' && w.week_date >= startStr && w.week_date <= endStr)
-
-      const byMonth = new Map<string, MidweekIncomingType[]>()
-      arr.forEach(w => {
-        const [y, m] = w.week_date.split('/').map(x => parseInt(x,10))
-        const mid = `${y}-${String(m).padStart(2,'0')}`
-        const list = byMonth.get(mid) || []
-        list.push(w)
-        byMonth.set(mid, list)
-      })
-
-      for (const [mid, list] of byMonth) {
-        await upsertMidweekScheduleMonth(mid, list, `https://source-materials.organized-app.com/api/${importLang}`)
-      }
-
-      const visible = byMonth.get(monthId)
-      if (visible && visible.length > 0) {
-        const merged = new Map<string, MidweekIncomingType>()
-        weeks.forEach(w => merged.set(w.week_date, w))
-        visible.forEach(w => merged.set(w.week_date, w))
-        setWeeks(Array.from(merged.values()))
-      }
-      toast.success('Programação importada e salva')
-    } catch (e: any) {
-      console.error(e)
-      const msg = (e && (e.message || e.toString())) || 'Falha ao importar programação'
-      toast.error(msg)
-    } finally {
-      setImportLoading(false)
-      setImportOpen(false)
-    }
-  }, [importStart, importEnd, importLang, monthId, weeks, monthsBetween])
+  const handleImportClick = React.useCallback(() => {
+    handleImport(importLang, importStart, importEnd)
+    setImportOpen(false)
+  }, [handleImport, importLang, importStart, importEnd])
 
   function RegisterCombo({ value, onChange, placeholder = "Selecionar..." }: { value?: string; onChange: (id: string) => void; placeholder?: string }) {
     const [open, setOpen] = React.useState(false)
@@ -331,16 +77,9 @@ export default function MidweekPage() {
     )
   }
 
-  const TYPES: { key: WeekType; label: string }[] = [
-    { key: 'normal', label: 'Semana normal' },
-    { key: 'visita_superintendente', label: 'Visita do superintendente' },
-    { key: 'congresso', label: 'Congresso regional' },
-    { key: 'assembleia', label: 'Assembleia' },
-    { key: 'celebracao', label: 'Celebração' },
-    { key: 'sem_reuniao', label: 'Não haverá reunião' },
-  ]
+  const TYPES: { key: WeekType; label: string }[] = WEEK_TYPES
 
-  const AssignmentLine = ({ label, value, icon: Icon }: { label: string; value?: string; icon?: any }) => (
+  const AssignmentLine = ({ label, value, icon: Icon }: { label: string; value?: string; icon?: React.ElementType }) => (
     <div className="flex items-center gap-2 py-1.5">
       {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
       <span className="text-xs text-muted-foreground min-w-[100px]">{label}:</span>
@@ -348,7 +87,7 @@ export default function MidweekPage() {
     </div>
   )
 
-  const EditableLine = ({ label, weekDate, field, icon: Icon }: { label: string; weekDate: string; field: keyof MidweekAssignmentsDisplay; icon?: any }) => {
+  const EditableLine = ({ label, weekDate, field, icon: Icon }: { label: string; weekDate: string; field: keyof MidweekAssignmentsDisplay; icon?: React.ElementType }) => {
     const a = assignByWeek[weekDate] || {}
     const value = a[field]
     
@@ -377,6 +116,54 @@ export default function MidweekPage() {
       return p.key === 'explicando_crencas_discurso' || p.key === 'discurso'
     }
     const noMeeting = a.week_type === 'sem_reuniao' || a.week_type === 'congresso' || a.week_type === 'assembleia' || a.week_type === 'celebracao'
+
+    const warnings = React.useMemo(() => {
+      const msgs: string[] = []
+      if (noMeeting) return msgs
+      const ids: string[] = []
+      Object.entries(a).forEach(([k, v]) => { if (k !== 'week_type' && typeof v === 'string' && v) ids.push(v as string) })
+      const counts = new Map<string, number>()
+      ids.forEach(id => counts.set(id, (counts.get(id) || 0) + 1))
+      Array.from(counts.entries()).forEach(([id, c]) => { if (c > 1) msgs.push(`${regById.get(id) || 'Registro'} com múltiplas designações nesta semana`) })
+      const prev = prevWeekDate(w.week_date)
+      if (prev) {
+        const prevIds: string[] = collectWeekIds(prev)
+        const seen = new Set(prevIds)
+        ids.forEach(id => { if (seen.has(id)) msgs.push(`${regById.get(id) || 'Registro'} designada em semanas consecutivas`) })
+      }
+      const pairKeys: string[] = []
+      const addIf = (idx: number, e?: string, h?: string) => { if (!isDiscurso(idx) && e && h) pairKeys.push(`${e}|${h}`) }
+      addIf(0, a.ayf_part1_estudante, a.ayf_part1_ajudante)
+      addIf(1, a.ayf_part2_estudante, a.ayf_part2_ajudante)
+      addIf(2, a.ayf_part3_estudante, a.ayf_part3_ajudante)
+      addIf(3, a.ayf_part4_estudante, a.ayf_part4_ajudante)
+      const pc = new Map<string, number>()
+      pairKeys.forEach(p => pc.set(p, (pc.get(p) || 0) + 1))
+      Array.from(pc.entries()).forEach(([p, c]) => {
+        if (c > 1) {
+          const [e, h] = p.split('|')
+          msgs.push(`Dupla repetida no Ministério: ${(regById.get(e) || 'Estudante')} e ${(regById.get(h) || 'Ajudante')} (mesma semana)`)
+        }
+      })
+      
+      if (prev) {
+        const ap = assignByWeek[prev] || {}
+        const prevPairs: string[] = []
+        const addPrev = (e?: string, h?: string) => { if (e && h) prevPairs.push(`${e}|${h}`) }
+        addPrev(ap.ayf_part1_estudante, ap.ayf_part1_ajudante)
+        addPrev(ap.ayf_part2_estudante, ap.ayf_part2_ajudante)
+        addPrev(ap.ayf_part3_estudante, ap.ayf_part3_ajudante)
+        addPrev(ap.ayf_part4_estudante, ap.ayf_part4_ajudante)
+        const setPrevPairs = new Set(prevPairs)
+        pairKeys.forEach(p => {
+          if (setPrevPairs.has(p)) {
+            const [e, h] = p.split('|')
+            msgs.push(`Dupla repetida com a semana anterior: ${(regById.get(e) || 'Estudante')} e ${(regById.get(h) || 'Ajudante')}`)
+          }
+        })
+      }
+      return msgs
+    }, [a, assignByWeek, isDiscurso, noMeeting, prevWeekDate, regById, w.week_date])
 
     return (
       <div className="rounded-lg border bg-card overflow-hidden shadow-sm">
@@ -416,6 +203,16 @@ export default function MidweekPage() {
               ))}
             </select>
           </div>
+          {warnings.length > 0 && (
+            <div className="rounded-md bg-red-50/50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 p-2.5 space-y-1">
+              {warnings.map((msg, idx) => (
+                <div key={idx} className="flex items-center gap-1.5 text-xs text-red-700 dark:text-red-300">
+                  <AlertCircle className="h-3 w-3" />
+                  <span className="truncate">{msg}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="p-3 sm:p-4 space-y-4">
@@ -733,7 +530,7 @@ export default function MidweekPage() {
                     <Label className="text-xs">Fim</Label>
                     <Input type="month" value={importEnd} onChange={e => setImportEnd(e.target.value)} className="h-8 w-full text-xs" />
                   </div>
-                  <Button size="sm" onClick={handleImport} className="gap-2 w-full" disabled={importLoading || !importStart || !importEnd || monthsBetween(importStart, importEnd) < 2}>
+                  <Button size="sm" onClick={handleImportClick} className="gap-2 w-full" disabled={importLoading || !importStart || !importEnd || monthsBetween(importStart, importEnd) < 2}>
                     {importLoading ? <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : <Download className="h-4 w-4" />}
                     Importar e salvar
                   </Button>
