@@ -44,6 +44,16 @@ service cloud.firestore {
         allow read: if isAuthed()
         allow write: if isElderOf(id)
       }
+
+      match /weekend_assign/{monthId} {
+        allow read: if isAuthed()
+        allow write: if isAdminOf(id) || isElderOf(id)
+      }
+
+      match /external_speakers/{speakerId} {
+        allow read: if isAuthed()
+        allow write: if isAdminOf(id) || isElderOf(id)
+      }
     }
 
     match /global_midweek_schedule_pt/{monthId} {

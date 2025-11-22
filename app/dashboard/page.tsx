@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { MapPin, Home, CalendarDays, Clock, Users, MapPinned, Package, Info, CheckCircle2, XCircle } from "lucide-react"
-import { listTerritories, getUserDoc, closeTerritoryRecordForUser, deleteOpenTerritoryRecordForUser, getPregacaoFixed, getPregacaoMonth, getMidweekAssignmentsMonth, type TerritoryDoc, type PregacaoFixedDoc, type PregacaoMonthDoc, type PregacaoEntry } from "@/lib/firebase"
+import { listTerritories, getUserDoc, closeTerritoryRecordForUser, deleteOpenTerritoryRecordForUser, getPregacaoFixed, getPregacaoMonth, getMidweekAssignmentsMonth, getWeekendAssignmentsMonth, type TerritoryDoc, type PregacaoFixedDoc, type PregacaoMonthDoc, type PregacaoEntry } from "@/lib/firebase"
+import talks from "@/locales/pt-br/weekend-meeting/public-talks/public_talks.json"
+import songs from "@/locales/pt-br/songs.json"
 
 export default function Page() {
   const { user } = useAuth()
@@ -34,6 +36,7 @@ export default function Page() {
   const [midweekAssignments, setMidweekAssignments] = React.useState<Record<string, any>>({})
   const [selectedMidweekDate, setSelectedMidweekDate] = React.useState<string>("")
   const [midweekView, setMidweekView] = React.useState<"semanal" | "mensal">("semanal")
+  const [weekendAssignments, setWeekendAssignments] = React.useState<Record<string, any>>({})
 
   React.useEffect(() => {
     const run = async () => {
@@ -58,6 +61,16 @@ export default function Page() {
         } else {
           setMidweekAssignments({})
         }
+        try {
+          const wam = await getWeekendAssignmentsMonth(u.congregacaoId, monthId)
+          if (wam?.weeks) {
+            const wmap: Record<string, any> = {}
+            Object.entries(wam.weeks).forEach(([k, v]) => { wmap[k.replace(/-/g, "/")] = v })
+            setWeekendAssignments(wmap)
+          } else {
+            setWeekendAssignments({})
+          }
+        } catch {}
       } finally {
         setLoading(false)
       }
@@ -118,6 +131,28 @@ export default function Page() {
     })
     return out.sort((a,b)=>parse(a.weekDate)-parse(b.weekDate))
   }, [midweekAssignments, userRegisterId])
+
+  const myWeekendWeeks = React.useMemo(() => {
+    if (!userRegisterId) return [] as { weekDate: string; roles: string[]; details?: { tema?: string; cantico?: string } }[]
+    const parse = (wd: string) => { const [y,m,d] = wd.split("/").map(x=>parseInt(x,10)); return new Date(y, m-1, d).getTime() }
+    const out: { weekDate: string; roles: string[]; details?: { tema?: string; cantico?: string } }[] = []
+    Object.entries(weekendAssignments).forEach(([wd, a]: [string, any]) => {
+      const roles: string[] = []
+      if (a?.presidente_fim_semana && a.presidente_fim_semana === userRegisterId) roles.push("Presidente fim de semana")
+      if (a?.dirigente_sentinela && a.dirigente_sentinela === userRegisterId) roles.push("Dirigente da Sentinela")
+      if (a?.leitor_sentinela && a.leitor_sentinela === userRegisterId) roles.push("Leitor da Sentinela")
+      if (a?.orador_register_id && a.orador_register_id === userRegisterId) {
+        const tema = a.discurso_publico_tema ? String((talks as any)[a.discurso_publico_tema] || "") : undefined
+        const cantico = a.discurso_publico_cantico ? String((songs as any)[a.discurso_publico_cantico] || "") : undefined
+        roles.push("Orador do discurso público")
+        out.push({ weekDate: wd, roles, details: { tema, cantico } })
+        return
+      }
+      if (a?.hospitalidade_register_id && a.hospitalidade_register_id === userRegisterId) roles.push("Hospitalidade ao orador")
+      if (roles.length > 0) out.push({ weekDate: wd, roles })
+    })
+    return out.sort((a,b)=>parse(a.weekDate)-parse(b.weekDate))
+  }, [weekendAssignments, userRegisterId])
 
   React.useEffect(() => {
     if (myMidweekWeeks.length === 0) { setSelectedMidweekDate(""); return }
@@ -340,6 +375,60 @@ export default function Page() {
                   </motion.div>
                 ))}
               </AnimatePresence>
+            </div>
+          )}
+        </motion.div>
+
+        <Separator />
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22 }}
+          className="space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-primary" />
+              <h2 className="text-xl font-semibold">Minhas Designações — Fim de Semana</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="weekendMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
+              <Input id="weekendMonthId" type="month" value={monthId} onChange={(e)=>setMonthId(e.target.value)} className="h-8 w-36 text-xs" />
+            </div>
+          </div>
+
+          {myWeekendWeeks.length === 0 ? (
+            <div className="text-center py-12 rounded-lg border bg-muted/30">
+              <CalendarDays className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Nenhuma designação neste mês</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {myWeekendWeeks.map((w, idx) => (
+                <motion.div
+                  key={`wk-${w.weekDate}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.03 }}
+                  className="rounded-md bg-muted/50 p-3 space-y-1.5"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <div className="font-medium text-sm">Semana {w.weekDate.replace(/\//g, '-')}</div>
+                      {w.details?.tema && (
+                        <div className="text-xs text-muted-foreground">Tema: {w.details.tema}</div>
+                      )}
+                      {w.details?.cantico && (
+                        <div className="text-xs text-muted-foreground">Cântico: {w.details.cantico}</div>
+                      )}
+                    </div>
+                  </div>
+                  <ul className="text-sm space-y-1">
+                    {w.roles.map((r,i)=> (<li key={i} className="flex items-center gap-2">• <span>{r}</span></li>))}
+                  </ul>
+                </motion.div>
+              ))}
             </div>
           )}
         </motion.div>

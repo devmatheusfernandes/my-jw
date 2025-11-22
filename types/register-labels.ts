@@ -20,6 +20,7 @@ export const designationLabels: Record<string, string> = {
   presidente_fim_semana: "Presidente reunião fim de semana",
   leitor_sentinela: "Leitor da Sentinela",
   dirigente_sentinela: "Dirigente da Sentinela",
+  discurso_publico: "Discurso público",
 }
 
 export const responsibilityLabels: Record<string, string> = {

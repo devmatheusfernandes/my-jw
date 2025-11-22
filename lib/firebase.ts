@@ -257,6 +257,66 @@ export const updateMidweekAssignmentsWeek = async (congregacaoId: string, monthI
   await setDoc(ref, { weeks: { [key]: clean }, updatedAt: serverTimestamp() }, { merge: true })
 }
 
+export type WeekendAssignWeek = {
+  presidente_fim_semana?: string
+  dirigente_sentinela?: string
+  leitor_sentinela?: string
+  orador_tipo?: 'interno' | 'externo'
+  orador_register_id?: string
+  orador_externo_id?: string
+  discurso_publico_tema?: string
+  discurso_publico_cantico?: string
+  hospitalidade_register_id?: string
+  observacoes?: string
+}
+
+export type WeekendAssignMonthDoc = { weeks?: Record<string, WeekendAssignWeek>; updatedAt?: unknown }
+
+export const getWeekendAssignmentsMonth = async (congregacaoId: string, monthId: string): Promise<WeekendAssignMonthDoc | null> => {
+  const ref = doc(db, 'congregations', congregacaoId, 'weekend_assign', monthId)
+  const snap = await getDoc(ref)
+  return snap.exists() ? (snap.data() as WeekendAssignMonthDoc) : null
+}
+
+export const updateWeekendAssignmentsMonth = async (congregacaoId: string, monthId: string, weeks: Record<string, WeekendAssignWeek>) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'weekend_assign', monthId)
+  const cleanIn = JSON.parse(JSON.stringify(weeks || {})) as Record<string, WeekendAssignWeek>
+  const clean: Record<string, WeekendAssignWeek> = {}
+  Object.keys(cleanIn).forEach((k) => { clean[k.replace(/\//g, '-')] = cleanIn[k] })
+  await setDoc(ref, { weeks: clean, updatedAt: serverTimestamp() }, { merge: true })
+}
+
+export const updateWeekendAssignmentsWeek = async (congregacaoId: string, monthId: string, weekDate: string, data: WeekendAssignWeek) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'weekend_assign', monthId)
+  const clean = JSON.parse(JSON.stringify(data || {}))
+  const key = (weekDate || '').replace(/\//g, '-')
+  await setDoc(ref, { weeks: { [key]: clean }, updatedAt: serverTimestamp() }, { merge: true })
+}
+
+export type ExternalSpeakerDoc = {
+  nome: string
+  congregacao?: string
+  contato?: string
+}
+
+export const listExternalSpeakers = async (congregacaoId: string): Promise<({ id: string } & ExternalSpeakerDoc)[]> => {
+  const snap = await getDocs(collection(db, 'congregations', congregacaoId, 'external_speakers'))
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as ExternalSpeakerDoc) }))
+}
+
+export const createExternalSpeaker = async (congregacaoId: string, data: ExternalSpeakerDoc) => {
+  const ref = await addDoc(collection(db, 'congregations', congregacaoId, 'external_speakers'), {
+    ...data,
+    createdAt: serverTimestamp(),
+  })
+  return { id: ref.id }
+}
+
+export const updateExternalSpeaker = async (congregacaoId: string, speakerId: string, data: Partial<ExternalSpeakerDoc>) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'external_speakers', speakerId)
+  await setDoc(ref, data, { merge: true })
+}
+
 export const listUsersByCongregation = async (congregacaoId: string): Promise<(UserDoc & { uid: string })[]> => {
   const q = query(collection(db, 'users'), where('congregacaoId', '==', congregacaoId))
   const snap = await getDocs(q)

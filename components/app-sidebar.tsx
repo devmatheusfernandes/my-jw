@@ -25,7 +25,7 @@ const data = {
       { title: "Fim de semana", url: "/dashboard/reuniao/fim-de-semana" },
       { title: "Meio de semana", url: "/dashboard/reuniao/meio-de-semana" },
     ] },
-    { title: "Usuários", url: "/dashboard/usuarios", icon: Users },
+    { title: "Pessoas", url: "/dashboard/usuarios", icon: Users },
     { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
   ],
 }
