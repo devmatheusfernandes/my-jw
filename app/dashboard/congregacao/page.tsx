@@ -48,6 +48,8 @@ export default function CongregacaoPage() {
   const [editFimSemanaHora, setEditFimSemanaHora] = React.useState("09:00")
   const [locais, setLocais] = React.useState<string[]>([])
   const [novoLocal, setNovoLocal] = React.useState("")
+  const [locaisCarrinho, setLocaisCarrinho] = React.useState<string[]>([])
+  const [novoLocalCarrinho, setNovoLocalCarrinho] = React.useState("")
 
   React.useEffect(() => {
     const run = async () => {
@@ -75,6 +77,7 @@ export default function CongregacaoPage() {
           setEditFimSemanaDia(c.fimSemanaDia)
           setEditFimSemanaHora(c.fimSemanaHora)
           setLocais(c.locaisPregacaoAprovados || [])
+          setLocaisCarrinho(c.locaisCarrinhoAprovados || [])
         }
       } finally {
         setLoadingMyCongregation(false)
@@ -142,6 +145,7 @@ export default function CongregacaoPage() {
         fimSemanaDia: editFimSemanaDia,
         fimSemanaHora: editFimSemanaHora,
         locaisPregacaoAprovados: locais,
+        locaisCarrinhoAprovados: locaisCarrinho,
       })
       const c = await getCongregationDoc(myCongregationId)
       setMyCongregation(c)
@@ -253,7 +257,7 @@ export default function CongregacaoPage() {
                     <Label htmlFor="e-fim-hora">Hora (fim de semana)</Label>
                     <Input id="e-fim-hora" type="time" value={editFimSemanaHora} onChange={(e) => setEditFimSemanaHora(e.target.value)} />
                   </div>
-                  <div className="md:col-span-2 space-y-2 border rounded-lg p-3 bg-muted/30">
+                <div className="md:col-span-2 space-y-2 border rounded-lg p-3 bg-muted/30">
                     <div className="text-sm font-medium">Locais aprovados para saída de campo</div>
                     <div className="flex items-end gap-2">
                       <div className="space-y-1 flex-1">
@@ -280,6 +284,33 @@ export default function CongregacaoPage() {
                       </div>
                     )}
                   </div>
+                  <div className="md:col-span-2 space-y-2 border rounded-lg p-3 bg-muted/30">
+                    <div className="text-sm font-medium">Locais aprovados para carrinhos</div>
+                    <div className="flex items-end gap-2">
+                      <div className="space-y-1 flex-1">
+                        <Label htmlFor="novo-local-carrinho">Novo local</Label>
+                        <Input id="novo-local-carrinho" value={novoLocalCarrinho} onChange={(e) => setNovoLocalCarrinho(e.target.value)} />
+                      </div>
+                      <Button onClick={() => {
+                        const v = novoLocalCarrinho.trim()
+                        if (!v) return
+                        setLocaisCarrinho((curr) => Array.from(new Set([...curr, v])))
+                        setNovoLocalCarrinho("")
+                      }}>Adicionar</Button>
+                    </div>
+                    {locaisCarrinho.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Nenhum local</p>
+                    ) : (
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {locaisCarrinho.map((l) => (
+                          <div key={l} className="flex items-center justify-between rounded-md border p-2 text-sm">
+                            <span>{l}</span>
+                            <Button variant="outline" size="sm" onClick={() => setLocaisCarrinho((curr) => curr.filter((x) => x !== l))}>Remover</Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="grid gap-2">
@@ -290,7 +321,10 @@ export default function CongregacaoPage() {
                   <div className="flex items-center gap-2 text-sm"><CalendarClock className="h-4 w-4" /><span className="font-medium">Meio da semana:</span> {myCongregation.meioSemanaDia} às {myCongregation.meioSemanaHora}</div>
                   <div className="flex items-center gap-2 text-sm"><Calendar className="h-4 w-4" /><span className="font-medium">Fim de semana:</span> {myCongregation.fimSemanaDia} às {myCongregation.fimSemanaHora}</div>
                   <div className="text-sm">
-                    <span className="font-medium">Locais aprovados:</span> {(myCongregation.locaisPregacaoAprovados || []).join(', ') || 'Nenhum'}
+                    <span className="font-medium">Locais de campo aprovados:</span> {(myCongregation.locaisPregacaoAprovados || []).join(', ') || 'Nenhum'}
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-medium">Locais de carrinhos aprovados:</span> {(myCongregation.locaisCarrinhoAprovados || []).join(', ') || 'Nenhum'}
                   </div>
                 </div>
               )

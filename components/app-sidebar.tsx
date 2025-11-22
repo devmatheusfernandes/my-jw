@@ -29,7 +29,7 @@ const data = {
       { title: "Mecânicas", url: "/dashboard/reuniao/mecanicas" },
     ] },
     { title: "Pregação", url: "/dashboard/pregacao", icon: BaggageClaim, items: [
-      { title: "Campo", url: "/dashboard/pregacao/campo" },
+      { title: "Campo", url: "/dashboard/pregacao" },
       { title: "Carrinhos", url: "/dashboard/pregacao/carrinhos" },
       { title: "Territorio", url: "/dashboard/territorio" },
     ] },

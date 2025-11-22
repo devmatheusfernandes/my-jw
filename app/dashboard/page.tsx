@@ -9,8 +9,8 @@ import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from "
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { MapPin, Home, CalendarDays, Clock, Users, MapPinned, Package, Info, CheckCircle2, XCircle, Wrench } from "lucide-react"
-import { listTerritories, getUserDoc, closeTerritoryRecordForUser, deleteOpenTerritoryRecordForUser, getPregacaoFixed, getPregacaoMonth, getMidweekAssignmentsMonth, getWeekendAssignmentsMonth, type TerritoryDoc, type PregacaoFixedDoc, type PregacaoMonthDoc, type PregacaoEntry } from "@/lib/firebase"
+import { MapPin, Home, CalendarDays, Clock, Users, MapPinned, Package, Info, CheckCircle2, XCircle, Wrench, WashingMachine } from "lucide-react"
+import { listTerritories, getUserDoc, closeTerritoryRecordForUser, deleteOpenTerritoryRecordForUser, getPregacaoFixed, getPregacaoMonth, getMidweekAssignmentsMonth, getWeekendAssignmentsMonth, getCleaningAssignmentsMonth, listFamilies, getCarrinhoAssignmentsMonth, type TerritoryDoc, type PregacaoFixedDoc, type PregacaoMonthDoc, type PregacaoEntry, type FamilyDoc } from "@/lib/firebase"
 import talks from "@/locales/pt-br/weekend-meeting/public-talks/public_talks.json"
 import songs from "@/locales/pt-br/songs.json"
 import { designationLabels } from "@/types/register-labels"
@@ -38,6 +38,9 @@ export default function Page() {
   const [selectedMidweekDate, setSelectedMidweekDate] = React.useState<string>("")
   const [midweekView, setMidweekView] = React.useState<"semanal" | "mensal">("semanal")
   const [weekendAssignments, setWeekendAssignments] = React.useState<Record<string, any>>({})
+  const [cleaningAssignments, setCleaningAssignments] = React.useState<Record<string, any>>({})
+  const [carrinhoAssignments, setCarrinhoAssignments] = React.useState<Record<string, any>>({})
+  const [families, setFamilies] = React.useState<({ id: string } & FamilyDoc)[]>([])
 
   React.useEffect(() => {
     const run = async () => {
@@ -70,6 +73,28 @@ export default function Page() {
             setWeekendAssignments(wmap)
           } else {
             setWeekendAssignments({})
+          }
+        } catch {}
+        try {
+          const cam = await getCleaningAssignmentsMonth(u.congregacaoId, monthId)
+          if (cam?.weeks) {
+            const cmap: Record<string, any> = {}
+            Object.entries(cam.weeks).forEach(([k, v]) => { cmap[k.replace(/-/g, "/")] = v })
+            setCleaningAssignments(cmap)
+          } else {
+            setCleaningAssignments({})
+          }
+          const fams = await listFamilies(u.congregacaoId)
+          setFamilies(fams)
+        } catch {}
+        try {
+          const car = await getCarrinhoAssignmentsMonth(u.congregacaoId, monthId)
+          if (car?.weeks) {
+            const r: Record<string, any> = {}
+            Object.entries(car.weeks).forEach(([k, v]) => { r[k.replace(/-/g, "/")] = v })
+            setCarrinhoAssignments(r)
+          } else {
+            setCarrinhoAssignments({})
           }
         } catch {}
       } finally {
@@ -192,6 +217,50 @@ export default function Page() {
     })
     return out.sort((a,b)=>parse(a.weekDate)-parse(b.weekDate))
   }, [weekendAssignments, userRegisterId])
+
+  const famNameById = React.useMemo(() => new Map(families.map(f => [f.id, f.nome || ""])), [families])
+  const myFamilyIds = React.useMemo(() => {
+    if (!userRegisterId) return [] as string[]
+    return families.filter(f => (f.membros || []).some(m => m.registerId === userRegisterId)).map(f => f.id)
+  }, [families, userRegisterId])
+
+  const myCleaningMidweek = React.useMemo(() => {
+    if (myFamilyIds.length === 0) return [] as { weekDate: string; families: string[] }[]
+    const parse = (wd: string) => { const [y,m,d] = wd.split("/").map(x=>parseInt(x,10)); return new Date(y, m-1, d).getTime() }
+    const out: { weekDate: string; families: string[] }[] = []
+    Object.entries(cleaningAssignments).forEach(([wd, a]: [string, any]) => {
+      const arr: string[] = a?.midweek_families || []
+      if (arr.some(id => myFamilyIds.includes(id))) {
+        out.push({ weekDate: wd, families: arr.map(id => famNameById.get(id) || id) })
+      }
+    })
+    return out.sort((a,b)=>parse(a.weekDate)-parse(b.weekDate))
+  }, [cleaningAssignments, myFamilyIds, famNameById])
+
+  const myCleaningWeekend = React.useMemo(() => {
+    if (myFamilyIds.length === 0) return [] as { weekDate: string; families: string[] }[]
+    const parse = (wd: string) => { const [y,m,d] = wd.split("/").map(x=>parseInt(x,10)); return new Date(y, m-1, d).getTime() }
+    const out: { weekDate: string; families: string[] }[] = []
+    Object.entries(cleaningAssignments).forEach(([wd, a]: [string, any]) => {
+      const arr: string[] = a?.weekend_families || []
+      if (arr.some(id => myFamilyIds.includes(id))) {
+        out.push({ weekDate: wd, families: arr.map(id => famNameById.get(id) || id) })
+      }
+    })
+    return out.sort((a,b)=>parse(a.weekDate)-parse(b.weekDate))
+  }, [cleaningAssignments, myFamilyIds, famNameById])
+
+  const myCarrinhos = React.useMemo(() => {
+    if (!userRegisterId) return [] as { weekDate: string; items: { start: string; duration: number; location?: string }[] }[]
+    const parse = (wd: string) => { const [y,m,d] = wd.split("/").map(x=>parseInt(x,10)); return new Date(y, m-1, d).getTime() }
+    const out: { weekDate: string; items: { start: string; duration: number; location?: string }[] }[] = []
+    Object.entries(carrinhoAssignments).forEach(([wd, w]: [string, any]) => {
+      const slots: any[] = w?.slots || []
+      const mine = slots.filter(s => Array.isArray(s.participants) && s.participants.includes(userRegisterId)).map(s => ({ start: s.start, duration: s.durationMinutes || 120, location: s.location }))
+      if (mine.length > 0) out.push({ weekDate: wd, items: mine })
+    })
+    return out.sort((a,b)=>parse(a.weekDate)-parse(b.weekDate))
+  }, [carrinhoAssignments, userRegisterId])
 
   React.useEffect(() => {
     if (myMidweekWeeks.length === 0) { setSelectedMidweekDate(""); return }
@@ -350,6 +419,99 @@ export default function Page() {
         </motion.div>
 
         <Separator />
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.26 }}
+          className="space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <WashingMachine className="h-5 w-5 text-primary" />
+              <h2 className="text-xl font-semibold">Minhas Designações — Limpeza</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="cleanMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
+              <Input id="cleanMonthId" type="month" value={monthId} onChange={(e)=>setMonthId(e.target.value)} className="h-8 w-36 text-xs" />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <div className="text-sm font-semibold">Meio de Semana</div>
+              {myCleaningMidweek.length === 0 ? (
+                <div className="text-xs text-muted-foreground rounded-lg border bg-muted/30 p-3">Nenhuma limpeza neste mês</div>
+              ) : (
+                <div className="space-y-2">
+                  {myCleaningMidweek.map((w, idx) => (
+                    <motion.div key={`cm-${w.weekDate}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.03 }} className="rounded-md bg-muted/50 p-3 space-y-1.5">
+                      <div className="font-medium text-sm">Semana {w.weekDate.replace(/\//g, '-')}</div>
+                      {w.families.length > 0 && (
+                        <div className="text-xs text-muted-foreground">Famílias: {w.families.join(', ')}</div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-semibold">Fim de Semana</div>
+              {myCleaningWeekend.length === 0 ? (
+                <div className="text-xs text-muted-foreground rounded-lg border bg-muted/30 p-3">Nenhuma limpeza neste mês</div>
+              ) : (
+                <div className="space-y-2">
+                  {myCleaningWeekend.map((w, idx) => (
+                    <motion.div key={`cw-${w.weekDate}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.03 }} className="rounded-md bg-muted/50 p-3 space-y-1.5">
+                      <div className="font-medium text-sm">Semana {w.weekDate.replace(/\//g, '-')}</div>
+                      {w.families.length > 0 && (
+                        <div className="text-xs text-muted-foreground">Famílias: {w.families.join(', ')}</div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.255 }}
+          className="space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              <h2 className="text-xl font-semibold">Minhas Designações — Carrinhos</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="carrMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
+              <Input id="carrMonthId" type="month" value={monthId} onChange={(e)=>setMonthId(e.target.value)} className="h-8 w-36 text-xs" />
+            </div>
+          </div>
+
+          {myCarrinhos.length === 0 ? (
+            <div className="text-xs text-muted-foreground rounded-lg border bg-muted/30 p-3">Nenhuma programação de carrinhos neste mês</div>
+          ) : (
+            <div className="space-y-2">
+              {myCarrinhos.map((w, idx) => (
+                <motion.div key={`cr-${w.weekDate}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.03 }} className="rounded-md bg-muted/50 p-3 space-y-1.5">
+                  <div className="font-medium text-sm">Semana {w.weekDate.replace(/\//g, '-')}</div>
+                  <ul className="text-sm space-y-1">
+                    {w.items.map((it,i)=> (
+                      <li key={i} className="flex items-center gap-2">
+                        • <span>{it.start}</span><span>•</span><span>{it.duration} min</span>{it.location ? (<span>• {it.location}</span>) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}

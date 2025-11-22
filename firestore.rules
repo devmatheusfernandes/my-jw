@@ -70,5 +70,16 @@ service cloud.firestore {
       allow read: if isAuthed()
       allow write: if isAdminOf(id) || isElderOf(id)
     }
+    
+    match /congregations/{id}/cleaning_assign/{monthId} {
+      allow read: if isAuthed()
+      allow write: if isAdminOf(id) || isElderOf(id)
+    }
+
+    match /congregations/{id}/carrinho_assign/{monthId} {
+      allow read: if isAuthed()
+      allow write: if isAdminOf(id) || isElderOf(id)
+    }
   }
 }
+     

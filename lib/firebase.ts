@@ -120,6 +120,7 @@ export type CongregationDoc = {
   congregationId?: string;
   accessCode?: string;
   locaisPregacaoAprovados?: string[];
+  locaisCarrinhoAprovados?: string[];
 };
 
 export type CongregationWithId = { id: string } & CongregationDoc;
@@ -214,6 +215,7 @@ export const updateCongregation = async (
     fimSemanaDia: string
     fimSemanaHora: string
     locaisPregacaoAprovados: string[]
+    locaisCarrinhoAprovados: string[]
   }>
 ) => {
   const ref = doc(db, 'congregations', id)
@@ -591,4 +593,69 @@ export const removeFamilyMember = async (congregacaoId: string, familyId: string
   const data = snap.data() as FamilyDoc
   const remaining = (data.membros || []).filter((m) => m.registerId !== registerId)
   await setDoc(ref, { membros: remaining }, { merge: true })
+}
+export type CleaningAssignWeek = {
+  midweek_families?: string[]
+  weekend_families?: string[]
+  observacoes?: string
+}
+
+export type CleaningAssignMonthDoc = { weeks?: Record<string, CleaningAssignWeek>; updatedAt?: unknown }
+
+export const getCleaningAssignmentsMonth = async (congregacaoId: string, monthId: string): Promise<CleaningAssignMonthDoc | null> => {
+  const ref = doc(db, 'congregations', congregacaoId, 'cleaning_assign', monthId)
+  const snap = await getDoc(ref)
+  return snap.exists() ? (snap.data() as CleaningAssignMonthDoc) : null
+}
+
+export const updateCleaningAssignmentsMonth = async (congregacaoId: string, monthId: string, weeks: Record<string, CleaningAssignWeek>) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'cleaning_assign', monthId)
+  const cleanIn = JSON.parse(JSON.stringify(weeks || {})) as Record<string, CleaningAssignWeek>
+  const clean: Record<string, CleaningAssignWeek> = {}
+  Object.keys(cleanIn).forEach((k) => { clean[k.replace(/\//g, '-')] = cleanIn[k] })
+  await setDoc(ref, { weeks: clean, updatedAt: serverTimestamp() }, { merge: true })
+}
+
+export const updateCleaningAssignmentsWeek = async (congregacaoId: string, monthId: string, weekDate: string, data: CleaningAssignWeek) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'cleaning_assign', monthId)
+  const clean = JSON.parse(JSON.stringify(data || {}))
+  const key = (weekDate || '').replace(/\//g, '-')
+  await setDoc(ref, { weeks: { [key]: clean }, updatedAt: serverTimestamp() }, { merge: true })
+}
+
+export type CarrinhoSlot = {
+  start: string
+  durationMinutes?: number
+  location?: string
+  participants?: string[]
+  fixed?: boolean
+  observacoes?: string
+}
+
+export type CarrinhoAssignWeek = {
+  slots?: CarrinhoSlot[]
+  observacoes?: string
+}
+
+export type CarrinhoAssignMonthDoc = { weeks?: Record<string, CarrinhoAssignWeek>; updatedAt?: unknown }
+
+export const getCarrinhoAssignmentsMonth = async (congregacaoId: string, monthId: string): Promise<CarrinhoAssignMonthDoc | null> => {
+  const ref = doc(db, 'congregations', congregacaoId, 'carrinho_assign', monthId)
+  const snap = await getDoc(ref)
+  return snap.exists() ? (snap.data() as CarrinhoAssignMonthDoc) : null
+}
+
+export const updateCarrinhoAssignmentsMonth = async (congregacaoId: string, monthId: string, weeks: Record<string, CarrinhoAssignWeek>) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'carrinho_assign', monthId)
+  const cleanIn = JSON.parse(JSON.stringify(weeks || {})) as Record<string, CarrinhoAssignWeek>
+  const clean: Record<string, CarrinhoAssignWeek> = {}
+  Object.keys(cleanIn).forEach((k) => { clean[k.replace(/\//g, '-')] = cleanIn[k] })
+  await setDoc(ref, { weeks: clean, updatedAt: serverTimestamp() }, { merge: true })
+}
+
+export const updateCarrinhoAssignmentsWeek = async (congregacaoId: string, monthId: string, weekDate: string, data: CarrinhoAssignWeek) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'carrinho_assign', monthId)
+  const clean = JSON.parse(JSON.stringify(data || {}))
+  const key = (weekDate || '').replace(/\//g, '-')
+  await setDoc(ref, { weeks: { [key]: clean }, updatedAt: serverTimestamp() }, { merge: true })
 }
