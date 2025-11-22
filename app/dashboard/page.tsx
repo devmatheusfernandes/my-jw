@@ -9,10 +9,11 @@ import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from "
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { MapPin, Home, CalendarDays, Clock, Users, MapPinned, Package, Info, CheckCircle2, XCircle } from "lucide-react"
+import { MapPin, Home, CalendarDays, Clock, Users, MapPinned, Package, Info, CheckCircle2, XCircle, Wrench } from "lucide-react"
 import { listTerritories, getUserDoc, closeTerritoryRecordForUser, deleteOpenTerritoryRecordForUser, getPregacaoFixed, getPregacaoMonth, getMidweekAssignmentsMonth, getWeekendAssignmentsMonth, type TerritoryDoc, type PregacaoFixedDoc, type PregacaoMonthDoc, type PregacaoEntry } from "@/lib/firebase"
 import talks from "@/locales/pt-br/weekend-meeting/public-talks/public_talks.json"
 import songs from "@/locales/pt-br/songs.json"
+import { designationLabels } from "@/types/register-labels"
 
 export default function Page() {
   const { user } = useAuth()
@@ -149,6 +150,44 @@ export default function Page() {
         return
       }
       if (a?.hospitalidade_register_id && a.hospitalidade_register_id === userRegisterId) roles.push("Hospitalidade ao orador")
+      if (roles.length > 0) out.push({ weekDate: wd, roles })
+    })
+    return out.sort((a,b)=>parse(a.weekDate)-parse(b.weekDate))
+  }, [weekendAssignments, userRegisterId])
+
+  const myMechanicalMidweek = React.useMemo(() => {
+    if (!userRegisterId) return [] as { weekDate: string; roles: string[] }[]
+    const parse = (wd: string) => { const [y,m,d] = wd.split("/").map(x=>parseInt(x,10)); return new Date(y, m-1, d).getTime() }
+    const keys = ["audio_video","volante","palco","indicador_porta","indicador_palco"]
+    const labels: Record<string, string> = {
+      audio_video: designationLabels.audio_video,
+      volante: designationLabels.volante,
+      palco: designationLabels.palco,
+      indicador_porta: designationLabels.indicador_porta,
+      indicador_palco: designationLabels.indicador_palco,
+    }
+    const out: { weekDate: string; roles: string[] }[] = []
+    Object.entries(midweekAssignments).forEach(([wd, a]) => {
+      const roles = keys.filter(k => a && a[k] && a[k] === userRegisterId).map(k => labels[k])
+      if (roles.length > 0) out.push({ weekDate: wd, roles })
+    })
+    return out.sort((a,b)=>parse(a.weekDate)-parse(b.weekDate))
+  }, [midweekAssignments, userRegisterId])
+
+  const myMechanicalWeekend = React.useMemo(() => {
+    if (!userRegisterId) return [] as { weekDate: string; roles: string[] }[]
+    const parse = (wd: string) => { const [y,m,d] = wd.split("/").map(x=>parseInt(x,10)); return new Date(y, m-1, d).getTime() }
+    const keys = ["audio_video","volante","palco","indicador_porta","indicador_palco"]
+    const labels: Record<string, string> = {
+      audio_video: designationLabels.audio_video,
+      volante: designationLabels.volante,
+      palco: designationLabels.palco,
+      indicador_porta: designationLabels.indicador_porta,
+      indicador_palco: designationLabels.indicador_palco,
+    }
+    const out: { weekDate: string; roles: string[] }[] = []
+    Object.entries(weekendAssignments).forEach(([wd, a]) => {
+      const roles = keys.filter(k => a && a[k] && a[k] === userRegisterId).map(k => labels[k])
       if (roles.length > 0) out.push({ weekDate: wd, roles })
     })
     return out.sort((a,b)=>parse(a.weekDate)-parse(b.weekDate))
@@ -311,6 +350,62 @@ export default function Page() {
         </motion.div>
 
         <Separator />
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.24 }}
+          className="space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Wrench className="h-5 w-5 text-primary" />
+              <h2 className="text-xl font-semibold">Minhas Designações — Mecânicas</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="mechMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
+              <Input id="mechMonthId" type="month" value={monthId} onChange={(e)=>setMonthId(e.target.value)} className="h-8 w-36 text-xs" />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <div className="text-sm font-semibold">Meio de Semana</div>
+              {myMechanicalMidweek.length === 0 ? (
+                <div className="text-xs text-muted-foreground rounded-lg border bg-muted/30 p-3">Nenhuma mecânica neste mês</div>
+              ) : (
+                <div className="space-y-2">
+                  {myMechanicalMidweek.map((w, idx) => (
+                    <motion.div key={`mm-${w.weekDate}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.03 }} className="rounded-md bg-muted/50 p-3 space-y-1.5">
+                      <div className="font-medium text-sm">Semana {w.weekDate.replace(/\//g, '-')}</div>
+                      <ul className="text-sm space-y-1">
+                        {w.roles.map((r,i)=> (<li key={i} className="flex items-center gap-2">• <span>{r}</span></li>))}
+                      </ul>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-semibold">Fim de Semana</div>
+              {myMechanicalWeekend.length === 0 ? (
+                <div className="text-xs text-muted-foreground rounded-lg border bg-muted/30 p-3">Nenhuma mecânica neste mês</div>
+              ) : (
+                <div className="space-y-2">
+                  {myMechanicalWeekend.map((w, idx) => (
+                    <motion.div key={`mw-${w.weekDate}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.03 }} className="rounded-md bg-muted/50 p-3 space-y-1.5">
+                      <div className="font-medium text-sm">Semana {w.weekDate.replace(/\//g, '-')}</div>
+                      <ul className="text-sm space-y-1">
+                        {w.roles.map((r,i)=> (<li key={i} className="flex items-center gap-2">• <span>{r}</span></li>))}
+                      </ul>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
 
         {/* Territories Section */}
         <motion.div

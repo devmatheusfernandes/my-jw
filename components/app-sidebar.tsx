@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Home, User, Users, Settings, Map, Calendar } from "lucide-react"
+import { Home, User, Users, Settings, Map, Calendar, WashingMachine, BaggageClaim } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -18,14 +18,21 @@ const data = {
   navMain: [
     { title: "Início", url: "/dashboard", icon: Home, isActive: true },
     { title: "Meu Perfil", url: "/dashboard/meu-perfil", icon: User },
-    { title: "Congregação", url: "/dashboard/congregacao", icon: Users },
-    { title: "Território", url: "/dashboard/territorio", icon: Map },
-    { title: "Pregação", url: "/dashboard/pregacao", icon: Calendar },
+    { title: "Congregação", url: "/dashboard/congregacao", icon: Users, items: [
+      { title: "Pessoas", url: "/dashboard/usuarios" },
+      { title: "Congregação", url: "/dashboard/congregacao" },
+      { title: "Limpeza", url: "/dashboard/limpeza" },
+    ] },
     { title: "Reuniões", url: "/dashboard/reuniao/meio-de-semana", icon: Calendar, items: [
       { title: "Fim de semana", url: "/dashboard/reuniao/fim-de-semana" },
       { title: "Meio de semana", url: "/dashboard/reuniao/meio-de-semana" },
+      { title: "Mecânicas", url: "/dashboard/reuniao/mecanicas" },
     ] },
-    { title: "Pessoas", url: "/dashboard/usuarios", icon: Users },
+    { title: "Pregação", url: "/dashboard/pregacao", icon: BaggageClaim, items: [
+      { title: "Campo", url: "/dashboard/pregacao/campo" },
+      { title: "Carrinhos", url: "/dashboard/pregacao/carrinhos" },
+      { title: "Territorio", url: "/dashboard/territorio" },
+    ] },
     { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
   ],
 }

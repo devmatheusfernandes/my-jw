@@ -3,7 +3,7 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useSearchParams } from "next/navigation"
 import { useAuth } from "@/components/providers/auth-provider"
-import { getUserDoc, getCongregationDoc, getRegisterDoc, updateRegister, type RegisterDoc, type UserDoc } from "@/lib/firebase"
+import { getUserDoc, getCongregationDoc, getRegisterDoc, updateRegister, listFamilies, type RegisterDoc, type UserDoc, type FamilyDoc } from "@/lib/firebase"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,6 +25,8 @@ function UsuarioDetalhesPageContent() {
   const [editingField, setEditingField] = React.useState<string | null>(null)
   const [editValues, setEditValues] = React.useState<any>({})
   const [saving, setSaving] = React.useState(false)
+  const [familyName, setFamilyName] = React.useState<string | undefined>(undefined)
+  const [familyRole, setFamilyRole] = React.useState<"chefe" | "mae" | "filho" | "marido" | "esposa" | undefined>(undefined)
 
   React.useEffect(() => {
     const run = async () => {
@@ -58,6 +60,23 @@ function UsuarioDetalhesPageContent() {
     }
     run()
   }, [user, params])
+
+  React.useEffect(() => {
+    const run = async () => {
+      if (!congregacaoId || !targetRegister?.id) { setFamilyName(undefined); setFamilyRole(undefined); return }
+      const fams = await listFamilies(congregacaoId)
+      const found = fams.find(f => (f.membros || []).some(m => m.registerId === targetRegister.id))
+      if (found) {
+        const member = (found.membros || []).find(m => m.registerId === targetRegister.id)
+        setFamilyName(found.nome || "")
+        setFamilyRole(member?.role as any)
+      } else {
+        setFamilyName(undefined)
+        setFamilyRole(undefined)
+      }
+    }
+    run()
+  }, [congregacaoId, targetRegister?.id])
 
 
   const formatDesignation = (k: string) => designationLabels[k] || k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
@@ -388,7 +407,8 @@ function UsuarioDetalhesPageContent() {
     { key: 'palco', label: designationLabels['palco'], show: isAdmin || targetRegister?.sexo === 'homem' },
     { key: 'explicando_crencas_discurso', label: designationLabels['explicando_crencas_discurso'], show: isAdmin || (targetRegister?.sexo === 'homem' && targetRegister?.status === 'publicador_batizado') },
     { key: 'discurso', label: designationLabels['discurso'], show: isAdmin || (targetRegister?.sexo === 'homem' && targetRegister?.status === 'publicador_batizado') },
-    { key: 'indicador', label: designationLabels['indicador'], show: isAdmin || targetRegister?.sexo === 'homem' },
+    { key: 'indicador_porta', label: designationLabels['indicador_porta'], show: isAdmin || targetRegister?.sexo === 'homem' },
+    { key: 'indicador_palco', label: designationLabels['indicador_palco'], show: isAdmin || targetRegister?.sexo === 'homem' },
     { key: 'discurso_tesouros', label: designationLabels['discurso_tesouros'], show: isAdmin || targetRegister?.privilegioServico === 'servo_ministerial' || targetRegister?.privilegioServico === 'anciao' },
     { key: 'joias_espirituais', label: designationLabels['joias_espirituais'], show: isAdmin || targetRegister?.privilegioServico === 'servo_ministerial' || targetRegister?.privilegioServico === 'anciao' },
     { key: 'leitor_do_estudo', label: designationLabels['leitor_do_estudo'], show: isAdmin || targetRegister?.privilegioServico === 'servo_ministerial' || targetRegister?.privilegioServico === 'anciao' },
@@ -430,7 +450,14 @@ function UsuarioDetalhesPageContent() {
               <UserCircle className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">{nomeBase}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">{nomeBase}</h1>
+                {familyName && familyRole && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-0.5 rounded-full">
+                    Família {familyName} — {({ chefe: 'Chefe de família', mae: 'Mãe', filho: 'Filho(a)', marido: 'Marido', esposa: 'Esposa' } as Record<string,string>)[familyRole]}
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground">Detalhes do publicador</p>
             </div>
           </div>

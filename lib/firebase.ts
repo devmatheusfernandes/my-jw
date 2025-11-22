@@ -134,6 +134,8 @@ export type RegisterDoc = {
   outrosPrivilegios?: { pioneiroAuxiliar?: boolean; pioneiroRegular?: boolean }
   designacoesAprovadas?: string[]
   responsabilidades?: string[]
+  familyId?: string | null
+  familyRole?: 'chefe' | 'mae' | 'filho' | 'marido' | 'esposa' | null
   createdAt?: unknown
 }
 
@@ -368,6 +370,8 @@ export const updateRegister = async (
     outrosPrivilegios?: { pioneiroAuxiliar?: boolean; pioneiroRegular?: boolean }
     designacoesAprovadas?: string[]
     responsabilidades?: string[]
+    familyId?: string | null
+    familyRole?: 'chefe' | 'mae' | 'filho' | 'marido' | 'esposa' | null
   }>
 ) => {
   const ref = doc(db, 'congregations', congregacaoId, 'register', registerId)
@@ -557,4 +561,34 @@ export const getPregacaoMonth = async (congregacaoId: string, monthId: string): 
 export const updatePregacaoMonth = async (congregacaoId: string, monthId: string, data: PregacaoMonthDoc) => {
   const ref = doc(db, 'congregations', congregacaoId, 'pregacao_month', monthId)
   await setDoc(ref, data, { merge: true })
+}
+export type FamilyMember = { registerId: string; role: 'chefe' | 'mae' | 'filho' | 'marido' | 'esposa' }
+export type FamilyDoc = { nome?: string; membros?: FamilyMember[]; createdAt?: unknown }
+
+export const listFamilies = async (congregacaoId: string): Promise<({ id: string } & FamilyDoc)[]> => {
+  const snap = await getDocs(collection(db, 'congregations', congregacaoId, 'family'))
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as FamilyDoc) }))
+}
+
+export const createFamily = async (congregacaoId: string, nome?: string) => {
+  const ref = await addDoc(collection(db, 'congregations', congregacaoId, 'family'), {
+    nome: nome || '',
+    membros: [],
+    createdAt: serverTimestamp(),
+  })
+  return { id: ref.id }
+}
+
+export const addFamilyMember = async (congregacaoId: string, familyId: string, member: FamilyMember) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'family', familyId)
+  await setDoc(ref, { membros: arrayUnion(member) }, { merge: true })
+}
+
+export const removeFamilyMember = async (congregacaoId: string, familyId: string, registerId: string) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'family', familyId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return
+  const data = snap.data() as FamilyDoc
+  const remaining = (data.membros || []).filter((m) => m.registerId !== registerId)
+  await setDoc(ref, { membros: remaining }, { merge: true })
 }

@@ -54,6 +54,11 @@ service cloud.firestore {
         allow read: if isAuthed()
         allow write: if isAdminOf(id) || isElderOf(id)
       }
+
+      match /family/{familyId} {
+        allow read: if isAuthed()
+        allow write: if isAdminOf(id) || isElderOf(id)
+      }
     }
 
     match /global_midweek_schedule_pt/{monthId} {

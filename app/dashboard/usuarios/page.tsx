@@ -23,7 +23,12 @@ import {
   attachUserToRegister,
   rejectUserAccess,
   unlinkUserFromCongregation,
+  listFamilies,
+  createFamily,
+  addFamilyMember,
+  removeFamilyMember,
   type RegisterDoc,
+  type FamilyDoc,
 } from "@/lib/firebase"
 
 export default function UsuariosPage() {
@@ -36,6 +41,9 @@ export default function UsuariosPage() {
   const [registers, setRegisters] = React.useState<({ id: string } & RegisterDoc)[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
   const [filterType, setFilterType] = React.useState<"all" | "linked" | "unlinked" | "noAccount">("all")
+  const [families, setFamilies] = React.useState<({ id: string } & FamilyDoc)[]>([])
+  const [openFamilies, setOpenFamilies] = React.useState(false)
+  const [newFamilyName, setNewFamilyName] = React.useState("")
 
   const [openCreateRegister, setOpenCreateRegister] = React.useState(false)
   const [nomeCompleto, setNomeCompleto] = React.useState("")
@@ -111,14 +119,16 @@ export default function UsuariosPage() {
   }, [user])
 
   const refreshData = React.useCallback(async (cid: string) => {
-    const [us, pend, regs] = await Promise.all([
+    const [us, pend, regs, fams] = await Promise.all([
       listUsersByCongregation(cid),
       listPendingUsersByCongregation(cid),
       listRegisters(cid),
+      listFamilies(cid),
     ])
     setUsers(us.map((x) => ({ uid: x.uid, nome: x.nome, registerId: x.registerId ?? null })))
     setPending(pend.map((x) => ({ uid: x.uid, nome: x.nome })))
     setRegisters(regs)
+    setFamilies(fams)
   }, [])
 
   React.useEffect(() => {
@@ -404,7 +414,8 @@ export default function UsuariosPage() {
                         { key: 'palco', label: 'Palco', show: sexo === 'homem' },
                         { key: 'explicando_crencas_discurso', label: 'Explicando suas crenças (discurso)', show: sexo === 'homem' && statusPub === 'publicador_batizado' },
                         { key: 'discurso', label: 'Discurso', show: sexo === 'homem' && statusPub === 'publicador_batizado' },
-                        { key: 'indicador', label: 'Indicador', show: sexo === 'homem' },
+                        { key: 'indicador_porta', label: 'Indicador (porta)', show: sexo === 'homem' },
+                        { key: 'indicador_palco', label: 'Indicador (palco)', show: sexo === 'homem' },
                         { key: 'discurso_tesouros', label: 'Tesouros da Palavra de Deus', show: privilegioServico === 'servo_ministerial' || privilegioServico === 'anciao' },
                         { key: 'joias_espirituais', label: 'Joias espirituais', show: privilegioServico === 'servo_ministerial' || privilegioServico === 'anciao' },
                         { key: 'leitor_do_estudo', label: 'Leitor do estudo', show: privilegioServico === 'servo_ministerial' || privilegioServico === 'anciao' },
@@ -538,55 +549,59 @@ export default function UsuariosPage() {
             Membros e Registros
           </h2>
           
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                variant={filterType === "all" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilterType("all")}
-                className="gap-2"
-              >
-                <Filter className="h-3 w-3" />
-                Todos ({members.length})
-              </Button>
-              <Button
-                variant={filterType === "linked" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilterType("linked")}
-                className="gap-2"
-              >
-                <LinkIcon className="h-3 w-3" />
-                Vinculados ({users.filter(u => u.registerId).length})
-              </Button>
-              <Button
-                variant={filterType === "unlinked" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilterType("unlinked")}
-                className="gap-2"
-              >
-                <Unlink className="h-3 w-3" />
-                Sem Registro ({users.filter(u => !u.registerId).length})
-              </Button>
-              <Button
-                variant={filterType === "noAccount" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilterType("noAccount")}
-                className="gap-2"
-              >
-                <UserX className="h-3 w-3" />
-                Sem Conta ({registers.filter(r => !users.find(u => u.registerId === r.id)).length})
-              </Button>
-            </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
           </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant={filterType === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterType("all")}
+              className="gap-2"
+            >
+              <Filter className="h-3 w-3" />
+              Todos ({members.length})
+            </Button>
+            <Button
+              variant={filterType === "linked" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterType("linked")}
+              className="gap-2"
+            >
+              <LinkIcon className="h-3 w-3" />
+              Vinculados ({users.filter(u => u.registerId).length})
+            </Button>
+            <Button
+              variant={filterType === "unlinked" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterType("unlinked")}
+              className="gap-2"
+            >
+              <Unlink className="h-3 w-3" />
+              Sem Registro ({users.filter(u => !u.registerId).length})
+            </Button>
+            <Button
+              variant={filterType === "noAccount" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterType("noAccount")}
+              className="gap-2"
+            >
+              <UserX className="h-3 w-3" />
+              Sem Conta ({registers.filter(r => !users.find(u => u.registerId === r.id)).length})
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setOpenFamilies(true)} className="gap-2">
+              <Users className="h-3 w-3" />
+              Gerenciar famílias
+            </Button>
+          </div>
+        </div>
 
           {/* Members List */}
           {filteredMembers.length === 0 ? (
@@ -770,6 +785,91 @@ export default function UsuariosPage() {
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
+
+      <Drawer open={openFamilies} onOpenChange={setOpenFamilies}>
+        <DrawerContent className="max-h-[90vh]">
+          <DrawerHeader>
+            <DrawerTitle>Famílias</DrawerTitle>
+          </DrawerHeader>
+          <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(90vh-160px)]">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="sm:col-span-2">
+                <Label htmlFor="newFamily">Nome da família</Label>
+                <Input id="newFamily" value={newFamilyName} onChange={(e)=>setNewFamilyName(e.target.value)} placeholder="Opcional (ex.: Silva)" />
+              </div>
+              <div className="flex items-end">
+                <Button onClick={async ()=>{ if(!congregacaoId) return; try { const { id } = await createFamily(congregacaoId, newFamilyName.trim() || undefined); setNewFamilyName(""); await refreshData(congregacaoId); toast.success("Família criada") } catch { toast.error("Falha ao criar família") } }} className="w-full">Criar</Button>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 pb-8">
+              {families.length === 0 ? (
+                <div className="text-sm text-muted-foreground">Nenhuma família criada</div>
+              ) : (
+                families.map((f) => (
+                  <FamilyCard key={f.id} family={f} registers={registers} congregacaoId={congregacaoId!} onChanged={async ()=>{ await refreshData(congregacaoId!); }} />
+                ))
+              )}
+            </div>
+          </div>
+        </DrawerContent>
+      </Drawer>
+    </div>
+  )
+}
+
+function FamilyCard({ family, registers, congregacaoId, onChanged }: { family: ({ id: string } & FamilyDoc); registers: ({ id: string } & RegisterDoc)[]; congregacaoId: string; onChanged: () => Promise<void> }) {
+  const [selectedReg, setSelectedReg] = React.useState<string>("")
+  const [selectedRole, setSelectedRole] = React.useState<'chefe' | 'mae' | 'filho' | 'marido' | 'esposa'>("chefe")
+  const regMap = React.useMemo(() => new Map(registers.map(r => [r.id, r.nomeCompleto])), [registers])
+  const roles: { key: 'chefe' | 'mae' | 'filho' | 'marido' | 'esposa'; label: string }[] = [
+    { key: 'chefe', label: 'Chefe de família' },
+    { key: 'mae', label: 'Mãe' },
+    { key: 'filho', label: 'Filho(a)' },
+    { key: 'marido', label: 'Marido' },
+    { key: 'esposa', label: 'Esposa' },
+  ]
+  return (
+    <div className="rounded-lg border bg-card p-3 space-y-3">
+      <div className="text-sm font-semibold">{family.nome || 'Família'}</div>
+      <div className="space-y-2">
+        <div className="text-xs text-muted-foreground">Membros</div>
+        <div className="space-y-1">
+          {(family.membros || []).length === 0 ? (
+            <div className="text-xs text-muted-foreground">Nenhum membro</div>
+          ) : (
+            (family.membros || []).map((m, idx) => (
+              <div key={`${family.id}-${m.registerId}-${idx}`} className="flex items-center justify-between gap-2 text-sm rounded-md bg-muted/30 p-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{regMap.get(m.registerId) || m.registerId}</span>
+                  <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{roles.find(r => r.key === m.role)?.label || m.role}</span>
+                </div>
+                <Button size="sm" variant="outline" onClick={async ()=>{ try { await removeFamilyMember(congregacaoId, family.id, m.registerId); await onChanged(); toast.success('Removido da família') } catch { toast.error('Falha ao remover') } }}>Remover</Button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div className="sm:col-span-2">
+          <Label htmlFor={`fam-${family.id}-reg`}>Adicionar membro</Label>
+          <select id={`fam-${family.id}-reg`} className="h-9 w-full rounded-md border bg-background px-3" value={selectedReg} onChange={(e)=>setSelectedReg(e.target.value)}>
+            <option value="">Selecione um registro</option>
+            {registers.map(r => (
+              <option key={r.id} value={r.id}>{r.nomeCompleto}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label htmlFor={`fam-${family.id}-role`}>Atribuição</Label>
+          <select id={`fam-${family.id}-role`} className="h-9 w-full rounded-md border bg-background px-3" value={selectedRole} onChange={(e)=>setSelectedRole(e.target.value as any)}>
+            {roles.map(r => (<option key={r.key} value={r.key}>{r.label}</option>))}
+          </select>
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <Button onClick={async ()=>{ if(!selectedReg) { toast.error('Selecione um registro'); return } try { await addFamilyMember(congregacaoId, family.id, { registerId: selectedReg, role: selectedRole }); await onChanged(); setSelectedReg(''); toast.success('Membro adicionado') } catch { toast.error('Falha ao adicionar') } }}>Adicionar</Button>
+      </div>
     </div>
   )
 }
