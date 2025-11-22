@@ -6,10 +6,11 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { MapPin, Home, CalendarDays, Clock, Users, MapPinned, Package, Info, CheckCircle2, XCircle, Wrench, WashingMachine } from "lucide-react"
+import { MapPin, Home, CalendarDays, Clock, Users, MapPinned, Package, Info, CheckCircle2, XCircle, Wrench, WashingMachine, ChevronLeft, ChevronRight } from "lucide-react"
 import { listTerritories, getUserDoc, closeTerritoryRecordForUser, deleteOpenTerritoryRecordForUser, getPregacaoFixed, getPregacaoMonth, getMidweekAssignmentsMonth, getWeekendAssignmentsMonth, getCleaningAssignmentsMonth, listFamilies, getCarrinhoAssignmentsMonth, type TerritoryDoc, type PregacaoFixedDoc, type PregacaoMonthDoc, type PregacaoEntry, type FamilyDoc } from "@/lib/firebase"
 import talks from "@/locales/pt-br/weekend-meeting/public-talks/public_talks.json"
 import songs from "@/locales/pt-br/songs.json"
@@ -41,6 +42,45 @@ export default function Page() {
   const [cleaningAssignments, setCleaningAssignments] = React.useState<Record<string, any>>({})
   const [carrinhoAssignments, setCarrinhoAssignments] = React.useState<Record<string, any>>({})
   const [families, setFamilies] = React.useState<({ id: string } & FamilyDoc)[]>([])
+
+  function MonthCombo({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+    const [open, setOpen] = React.useState(false)
+    const [year, setYear] = React.useState(() => { const [y] = value.split('-').map(x=>parseInt(x,10)); return y || new Date().getFullYear() })
+    const label = React.useMemo(() => {
+      const [y,m] = value.split('-').map(x=>parseInt(x,10))
+      const dt = new Date(y, (m||1)-1, 1)
+      return dt.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+    }, [value])
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="h-8 px-3 text-xs justify-between w-36">
+            <span className="truncate">{label}</span>
+            <CalendarDays className="h-4 w-4 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="p-3 w-[280px]" align="end">
+          <div className="flex items-center justify-between mb-2">
+            <Button variant="outline" size="sm" onClick={()=>setYear(year-1)} className="h-7 px-2"><ChevronLeft className="h-4 w-4" /></Button>
+            <div className="text-xs font-medium">{year}</div>
+            <Button variant="outline" size="sm" onClick={()=>setYear(year+1)} className="h-7 px-2"><ChevronRight className="h-4 w-4" /></Button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: 12 }).map((_, i) => {
+              const m = i + 1
+              const dt = new Date(year, i, 1)
+              const short = dt.toLocaleDateString('pt-BR', { month: 'short' })
+              const mid = `${year}-${String(m).padStart(2,'0')}`
+              const selected = value === mid
+              return (
+                <Button key={i} variant={selected ? 'default' : 'outline'} className="h-8 text-xs" onClick={()=>{ onChange(mid); setOpen(false) }}>{short}</Button>
+              )
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
+    )
+  }
 
   React.useEffect(() => {
     const run = async () => {
@@ -411,11 +451,19 @@ export default function Page() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-2"
         >
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Home className="h-7 w-7 text-primary" />
-            Página Inicial
-          </h1>
-          <p className="text-sm text-muted-foreground">Visão geral das suas atividades e designações</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+                <Home className="h-7 w-7 text-primary" />
+                Página Inicial
+              </h1>
+              <p className="text-sm text-muted-foreground">Visão geral das suas atividades e designações</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="globalMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
+              <MonthCombo value={monthId} onChange={setMonthId} />
+            </div>
+          </div>
         </motion.div>
 
         <Separator />
@@ -426,15 +474,9 @@ export default function Page() {
           transition={{ delay: 0.26 }}
           className="space-y-4"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <WashingMachine className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-semibold">Minhas Designações — Limpeza</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="cleanMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
-              <Input id="cleanMonthId" type="month" value={monthId} onChange={(e)=>setMonthId(e.target.value)} className="h-8 w-36 text-xs" />
-            </div>
+          <div className="flex items-center gap-2">
+            <WashingMachine className="h-5 w-5 text-primary" />
+            <h2 className="text-xl font-semibold">Minhas Designações — Limpeza</h2>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -482,15 +524,9 @@ export default function Page() {
           transition={{ delay: 0.255 }}
           className="space-y-4"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-semibold">Minhas Designações — Carrinhos</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="carrMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
-              <Input id="carrMonthId" type="month" value={monthId} onChange={(e)=>setMonthId(e.target.value)} className="h-8 w-36 text-xs" />
-            </div>
+          <div className="flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-primary" />
+            <h2 className="text-xl font-semibold">Minhas Designações — Carrinhos</h2>
           </div>
 
           {myCarrinhos.length === 0 ? (
@@ -519,15 +555,9 @@ export default function Page() {
           transition={{ delay: 0.24 }}
           className="space-y-4"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Wrench className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-semibold">Minhas Designações — Mecânicas</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="mechMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
-              <Input id="mechMonthId" type="month" value={monthId} onChange={(e)=>setMonthId(e.target.value)} className="h-8 w-36 text-xs" />
-            </div>
+          <div className="flex items-center gap-2">
+            <Wrench className="h-5 w-5 text-primary" />
+            <h2 className="text-xl font-semibold">Minhas Designações — Mecânicas</h2>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -644,15 +674,9 @@ export default function Page() {
           transition={{ delay: 0.22 }}
           className="space-y-4"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CalendarDays className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-semibold">Minhas Designações — Fim de Semana</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="weekendMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
-              <Input id="weekendMonthId" type="month" value={monthId} onChange={(e)=>setMonthId(e.target.value)} className="h-8 w-36 text-xs" />
-            </div>
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-primary" />
+            <h2 className="text-xl font-semibold">Minhas Designações — Fim de Semana</h2>
           </div>
 
           {myWeekendWeeks.length === 0 ? (
@@ -758,16 +782,7 @@ export default function Page() {
                   <CalendarDays className="h-4 w-4 text-primary" />
                   Programação Mensal
                 </div>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="monthId" className="text-xs whitespace-nowrap">Mês:</Label>
-                  <Input
-                    id="monthId"
-                    type="month"
-                    value={monthId}
-                    onChange={(e) => setMonthId(e.target.value)}
-                    className="h-8 w-36 text-xs"
-                  />
-                </div>
+                <div />
               </div>
               <div className="p-4">
                 {myMonthlyLeadership.length === 0 ? (
@@ -826,10 +841,6 @@ export default function Page() {
             <div className="flex items-center gap-2">
               <CalendarDays className="h-5 w-5 text-primary" />
               <h2 className="text-xl font-semibold">Minhas Designações — Meio de Semana</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="midweekMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
-              <Input id="midweekMonthId" type="month" value={monthId} onChange={(e)=>setMonthId(e.target.value)} className="h-8 w-36 text-xs" />
             </div>
           </div>
 

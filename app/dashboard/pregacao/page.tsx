@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
-import { ChevronsUpDown, Calendar, MapPin, Clock, Plus, Trash2, Users, Save, Eye, Edit3, Info } from "lucide-react"
+import { ChevronsUpDown, Calendar, MapPin, Clock, Plus, Trash2, Users, Save, Eye, Edit3, Info, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import { useAuth } from "@/components/providers/auth-provider"
 import {
   getUserDoc,
@@ -61,6 +61,45 @@ export default function PregacaoPage() {
   const [approvedLocais, setApprovedLocais] = React.useState<string[]>([])
   const [leaders, setLeaders] = React.useState<{ id: string; nomeCompleto: string }[]>([])
   const leaderById = React.useMemo(() => new Map(leaders.map((l) => [l.id, l.nomeCompleto])), [leaders])
+
+  function MonthCombo({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+    const [open, setOpen] = React.useState(false)
+    const [year, setYear] = React.useState(() => { const [y] = value.split('-').map(x=>parseInt(x,10)); return y || new Date().getFullYear() })
+    const label = React.useMemo(() => {
+      const [y,m] = value.split('-').map(x=>parseInt(x,10))
+      const dt = new Date(y, (m||1)-1, 1)
+      return dt.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+    }, [value])
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="h-9 px-3 text-xs justify-between w-40">
+            <span className="truncate">{label}</span>
+            <CalendarDays className="h-4 w-4 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="p-3 w-[280px]" align="end">
+          <div className="flex items-center justify-between mb-2">
+            <Button variant="outline" size="sm" onClick={()=>setYear(year-1)} className="h-7 px-2"><ChevronLeft className="h-4 w-4" /></Button>
+            <div className="text-sm font-medium">{year}</div>
+            <Button variant="outline" size="sm" onClick={()=>setYear(year+1)} className="h-7 px-2"><ChevronRight className="h-4 w-4" /></Button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: 12 }).map((_, i) => {
+              const m = i + 1
+              const dt = new Date(year, i, 1)
+              const short = dt.toLocaleDateString('pt-BR', { month: 'short' })
+              const mid = `${year}-${String(m).padStart(2,'0')}`
+              const selected = value === mid
+              return (
+                <Button key={i} variant={selected ? 'default' : 'outline'} className="h-8 text-xs" onClick={()=>{ onChange(mid); setOpen(false) }}>{short}</Button>
+              )
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
+    )
+  }
 
   React.useEffect(() => {
     const run = async () => {
@@ -536,13 +575,7 @@ export default function PregacaoPage() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <Label htmlFor="monthId" className="text-sm whitespace-nowrap">Selecionar mês:</Label>
-                <Input
-                  id="monthId"
-                  type="month"
-                  value={monthId}
-                  onChange={(e) => setMonthId(e.target.value)}
-                  className="w-40"
-                />
+                <MonthCombo value={monthId} onChange={setMonthId} />
               </div>
               {isElder && (
                 <Button onClick={handleSaveMonthly} disabled={savingMonthly} className="gap-2">

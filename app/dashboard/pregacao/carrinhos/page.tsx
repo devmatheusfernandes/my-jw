@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { toast } from "sonner"
-import { CalendarClock, Users, MapPin, Repeat, Plus } from "lucide-react"
+import { CalendarDays, CalendarClock, Users, MapPin, Repeat, Plus, ChevronLeft, ChevronRight } from "lucide-react"
 import { useAuth } from "@/components/providers/auth-provider"
 import { getUserDoc, getCongregationDoc, listRegisters, getCarrinhoAssignmentsMonth, updateCarrinhoAssignmentsWeek, type CarrinhoSlot, type CarrinhoAssignWeek } from "@/lib/firebase"
 
@@ -93,6 +93,45 @@ function useCarrinhos() {
   }, [congregacaoId, monthId])
 
   return { monthId, setMonthId, congregacaoId, locations, registers, weeks, setWeeks, saveWeek, loading }
+}
+
+function MonthCombo({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = React.useState(false)
+  const [year, setYear] = React.useState(() => { const [y] = value.split('-').map(x=>parseInt(x,10)); return y || new Date().getFullYear() })
+  const label = React.useMemo(() => {
+    const [y,m] = value.split('-').map(x=>parseInt(x,10))
+    const dt = new Date(y, (m||1)-1, 1)
+    return dt.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  }, [value])
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="h-8 px-3 text-xs justify-between w-36">
+          <span className="truncate">{label}</span>
+          <CalendarDays className="h-4 w-4 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-3 w-[280px]" align="end">
+        <div className="flex items-center justify-between mb-2">
+          <Button variant="outline" size="sm" onClick={()=>setYear(year-1)} className="h-7 px-2"><ChevronLeft className="h-4 w-4" /></Button>
+          <div className="text-xs font-medium">{year}</div>
+          <Button variant="outline" size="sm" onClick={()=>setYear(year+1)} className="h-7 px-2"><ChevronRight className="h-4 w-4" /></Button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {Array.from({ length: 12 }).map((_, i) => {
+            const m = i + 1
+            const dt = new Date(year, i, 1)
+            const short = dt.toLocaleDateString('pt-BR', { month: 'short' })
+            const mid = `${year}-${String(m).padStart(2,'0')}`
+            const selected = value === mid
+            return (
+              <Button key={i} variant={selected ? 'default' : 'outline'} className="h-8 text-xs" onClick={()=>{ onChange(mid); setOpen(false) }}>{short}</Button>
+            )
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 function SelectLocation({ locations, value, onChange, disabled }: { locations: string[]; value?: string; onChange: (v: string)=>void; disabled?: boolean }) {
@@ -246,7 +285,7 @@ export default function CarrinhosPage() {
           </div>
           <div className="flex items-center gap-2">
             <Label htmlFor="carrMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
-            <Input id="carrMonthId" type="month" value={monthId} onChange={(e)=>setMonthId(e.target.value)} className="h-8 w-36 text-xs" />
+            <MonthCombo value={monthId} onChange={setMonthId} />
             <Button onClick={()=>setEditing((e)=>!e)} variant={editing ? "outline" : undefined} className="h-8 px-3 text-xs">
               {editing ? "Cancelar" : "Editar"}
             </Button>
