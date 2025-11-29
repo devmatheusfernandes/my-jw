@@ -121,6 +121,8 @@ export type CongregationDoc = {
   accessCode?: string;
   locaisPregacaoAprovados?: string[];
   locaisCarrinhoAprovados?: string[];
+  assignmentsSharedOpen?: boolean;
+  publicViewId?: string;
 };
 
 export type CongregationWithId = { id: string } & CongregationDoc;
@@ -216,6 +218,8 @@ export const updateCongregation = async (
     fimSemanaHora: string
     locaisPregacaoAprovados: string[]
     locaisCarrinhoAprovados: string[]
+    assignmentsSharedOpen: boolean
+    publicViewId: string
   }>
 ) => {
   const ref = doc(db, 'congregations', id)

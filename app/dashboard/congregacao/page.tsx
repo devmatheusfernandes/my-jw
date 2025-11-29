@@ -50,6 +50,9 @@ export default function CongregacaoPage() {
   const [novoLocal, setNovoLocal] = React.useState("")
   const [locaisCarrinho, setLocaisCarrinho] = React.useState<string[]>([])
   const [novoLocalCarrinho, setNovoLocalCarrinho] = React.useState("")
+  const [assignmentsSharedOpen, setAssignmentsSharedOpen] = React.useState<boolean>(false)
+  const [publicViewId, setPublicViewId] = React.useState<string>("")
+  const [shareUrl, setShareUrl] = React.useState<string>("")
 
   React.useEffect(() => {
     const run = async () => {
@@ -78,6 +81,10 @@ export default function CongregacaoPage() {
           setEditFimSemanaHora(c.fimSemanaHora)
           setLocais(c.locaisPregacaoAprovados || [])
           setLocaisCarrinho(c.locaisCarrinhoAprovados || [])
+          setAssignmentsSharedOpen(!!(c as any).assignmentsSharedOpen)
+          setPublicViewId((c as any).publicViewId || "")
+          const origin = typeof window !== 'undefined' ? window.location.origin : ''
+          setShareUrl(origin && (c as any).publicViewId ? `${origin}/shared/congregacao/${c.id}/${(c as any).publicViewId}` : "")
         }
       } finally {
         setLoadingMyCongregation(false)
@@ -326,6 +333,52 @@ export default function CongregacaoPage() {
                   <div className="text-sm">
                     <span className="font-medium">Locais de carrinhos aprovados:</span> {(myCongregation.locaisCarrinhoAprovados || []).join(', ') || 'Nenhum'}
                   </div>
+                  {(isAdmin || isElder) ? (
+                    <div className="mt-2 grid gap-2 rounded-md border p-3 bg-muted/30">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-medium">Página pública de programação</div>
+                        <div className="flex items-center gap-2">
+                          <Label className="text-xs">Ativar</Label>
+                          <Button variant={assignmentsSharedOpen ? undefined : "outline"} className="h-8 px-3 text-xs" onClick={async ()=>{
+                            if (!myCongregationId) return
+                            const nextOpen = !assignmentsSharedOpen
+                            let nextViewId = publicViewId
+                            if (nextOpen && (!nextViewId || nextViewId.length < 6)) {
+                              nextViewId = Array.from(crypto.getRandomValues(new Uint8Array(12))).map(b=>b.toString(16).padStart(2,'0')).join('')
+                            }
+                            await updateCongregation(myCongregationId, { assignmentsSharedOpen: nextOpen, publicViewId: nextViewId })
+                            const c = await getCongregationDoc(myCongregationId)
+                            setMyCongregation(c)
+                            setAssignmentsSharedOpen(!!(c as any)?.assignmentsSharedOpen)
+                            setPublicViewId((c as any)?.publicViewId || "")
+                            const origin = typeof window !== 'undefined' ? window.location.origin : ''
+                            setShareUrl(nextOpen && origin ? `${origin}/shared/congregacao/${myCongregationId}/${nextViewId}` : "")
+                          }}>{assignmentsSharedOpen ? "Desativar" : "Ativar"}</Button>
+                        </div>
+                      </div>
+                      {shareUrl ? (
+                        <div className="grid gap-2 md:grid-cols-[1fr_160px] items-center">
+                          <div className="flex items-center gap-1 text-xs break-all"><span className="font-medium">Link:</span> {shareUrl}</div>
+                          <img alt="QR Code" className="h-40 w-40 rounded-md border" src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(shareUrl)}`} />
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">Desativado. Ative para gerar link público.</div>
+                      )}
+                      {assignmentsSharedOpen ? (
+                        <div>
+                          <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={async ()=>{
+                            if (!myCongregationId) return
+                            const id = Array.from(crypto.getRandomValues(new Uint8Array(12))).map(b=>b.toString(16).padStart(2,'0')).join('')
+                            await updateCongregation(myCongregationId, { publicViewId: id })
+                            setPublicViewId(id)
+                            const origin = typeof window !== 'undefined' ? window.location.origin : ''
+                            setShareUrl(origin ? `${origin}/shared/congregacao/${myCongregationId}/${id}` : "")
+                            toast.success("Novo link público gerado")
+                          }}>Regenerar link</Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               )
             ) : (

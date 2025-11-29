@@ -21,12 +21,12 @@ service cloud.firestore {
     }
 
     match /congregations/{id} {
-      allow read: if isAuthed()
+      allow read: if isAuthed() || (resource.data.assignmentsSharedOpen == true)
       allow create: if isAuthed()
       allow update, delete: if isAdminOf(id) || isElderOf(id)
 
       match /register/{regId} {
-        allow read: if isAuthed()
+        allow read: if isAuthed() || (get(/databases/$(database)/documents/congregations/$(id)).data.assignmentsSharedOpen == true)
         allow write: if isAdminOf(id)
       }
 
@@ -36,27 +36,27 @@ service cloud.firestore {
       }
 
       match /pregacao/{docId} {
-        allow read: if isAuthed()
+        allow read: if isAuthed() || (get(/databases/$(database)/documents/congregations/$(id)).data.assignmentsSharedOpen == true)
         allow write: if isElderOf(id)
       }
 
       match /pregacao_month/{monthId} {
-        allow read: if isAuthed()
+        allow read: if isAuthed() || (get(/databases/$(database)/documents/congregations/$(id)).data.assignmentsSharedOpen == true)
         allow write: if isElderOf(id)
       }
 
       match /weekend_assign/{monthId} {
-        allow read: if isAuthed()
+        allow read: if isAuthed() || (get(/databases/$(database)/documents/congregations/$(id)).data.assignmentsSharedOpen == true)
         allow write: if isAdminOf(id) || isElderOf(id)
       }
 
       match /external_speakers/{speakerId} {
-        allow read: if isAuthed()
+        allow read: if isAuthed() || (get(/databases/$(database)/documents/congregations/$(id)).data.assignmentsSharedOpen == true)
         allow write: if isAdminOf(id) || isElderOf(id)
       }
 
       match /family/{familyId} {
-        allow read: if isAuthed()
+        allow read: if isAuthed() || (get(/databases/$(database)/documents/congregations/$(id)).data.assignmentsSharedOpen == true)
         allow write: if isAdminOf(id) || isElderOf(id)
       }
     }
@@ -67,17 +67,17 @@ service cloud.firestore {
     }
 
     match /congregations/{id}/midweek_assign/{monthId} {
-      allow read: if isAuthed()
+      allow read: if isAuthed() || (get(/databases/$(database)/documents/congregations/$(id)).data.assignmentsSharedOpen == true)
       allow write: if isAdminOf(id) || isElderOf(id)
     }
     
     match /congregations/{id}/cleaning_assign/{monthId} {
-      allow read: if isAuthed()
+      allow read: if isAuthed() || (get(/databases/$(database)/documents/congregations/$(id)).data.assignmentsSharedOpen == true)
       allow write: if isAdminOf(id) || isElderOf(id)
     }
 
     match /congregations/{id}/carrinho_assign/{monthId} {
-      allow read: if isAuthed()
+      allow read: if isAuthed() || (get(/databases/$(database)/documents/congregations/$(id)).data.assignmentsSharedOpen == true)
       allow write: if isAdminOf(id) || isElderOf(id)
     }
   }
