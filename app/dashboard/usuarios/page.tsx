@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { MoreHorizontal, Users, UserPlus, Search, Filter, UserCheck, UserX, Link as LinkIcon, Unlink, Eye, AlertCircle, CheckCircle2 } from "lucide-react"
+import { MoreHorizontal, Users, UserPlus, Search, Filter, UserCheck, UserX, Link as LinkIcon, Unlink, Eye, AlertCircle, CheckCircle2, X } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/components/providers/auth-provider"
 import Link from "next/link"
@@ -40,6 +40,7 @@ export default function UsuariosPage() {
   const [pending, setPending] = React.useState<{ uid: string; nome: string }[]>([])
   const [registers, setRegisters] = React.useState<({ id: string } & RegisterDoc)[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
+  const [searchInput, setSearchInput] = React.useState("")
   const [filterType, setFilterType] = React.useState<"all" | "linked" | "unlinked" | "noAccount">("all")
   const [families, setFamilies] = React.useState<({ id: string } & FamilyDoc)[]>([])
   const [openFamilies, setOpenFamilies] = React.useState(false)
@@ -66,6 +67,11 @@ export default function UsuariosPage() {
   const [createNomeCompleto, setCreateNomeCompleto] = React.useState("")
   const [createNascimento, setCreateNascimento] = React.useState("")
   const [createBatismo, setCreateBatismo] = React.useState("")
+
+  const [openLink, setOpenLink] = React.useState(false)
+  const [selectedUid, setSelectedUid] = React.useState<string>("")
+  const [selectedRegisterForLink, setSelectedRegisterForLink] = React.useState<string>("")
+  const [linkingBusy, setLinkingBusy] = React.useState(false)
 
   const autoBaseDesignacoes = React.useCallback((sx: 'homem' | 'mulher' | '', st: 'publicador_nao_batizado' | 'publicador_batizado' | '', ps: 'servo_ministerial' | 'anciao' | '') => {
     const set = new Set<string>()
@@ -151,6 +157,20 @@ export default function UsuariosPage() {
     return [...userItems, ...registerItems]
   }, [users, registers])
 
+  const counts = React.useMemo(() => {
+    const linked = users.filter((u) => u.registerId).length
+    const unlinked = users.filter((u) => !u.registerId).length
+    const noAccount = registers.filter((r) => !users.find((u) => u.registerId === r.id)).length
+    return { all: members.length, linked, unlinked, noAccount }
+  }, [members, users, registers])
+
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      setSearchQuery(searchInput)
+    }, 250)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
   const filteredMembers = React.useMemo(() => {
     let filtered = members
 
@@ -178,6 +198,41 @@ export default function UsuariosPage() {
 
     return filtered
   }, [members, searchQuery, filterType])
+
+  React.useEffect(() => {
+    if (openLink) {
+      setSelectedUid((curr) => curr || users[0]?.uid || "")
+      setSelectedRegisterForLink((curr) => curr || registers[0]?.id || "")
+    }
+  }, [openLink, users, registers])
+
+  const handleLinkSelected = async () => {
+    if (!congregacaoId || !selectedUid || !selectedRegisterForLink) return
+    try {
+      setLinkingBusy(true)
+      await attachUserToRegister(selectedUid, congregacaoId, selectedRegisterForLink)
+      await refreshData(congregacaoId)
+      toast.success("Vinculado ao registro")
+    } catch {
+      toast.error("Falha ao vincular")
+    } finally {
+      setLinkingBusy(false)
+    }
+  }
+
+  const handleUnlinkSelected = async () => {
+    if (!congregacaoId || !selectedUid) return
+    try {
+      setLinkingBusy(true)
+      await unlinkUserFromCongregation(selectedUid)
+      await refreshData(congregacaoId)
+      toast.success("Desvinculado e removido da congregação")
+    } catch {
+      toast.error("Falha ao desvincular")
+    } finally {
+      setLinkingBusy(false)
+    }
+  }
 
   const handleOpenAccept = async (uid: string, nome: string) => {
     setAcceptTargetUid(uid)
@@ -340,6 +395,7 @@ export default function UsuariosPage() {
               </h1>
               <p className="text-sm text-muted-foreground">Gerencie membros, registros e permissões da congregação</p>
             </div>
+            <div className="flex items-center gap-2">
             <Drawer open={openCreateRegister} onOpenChange={setOpenCreateRegister}>
               <DrawerTrigger asChild>
                 <Button className="gap-2">
@@ -481,6 +537,57 @@ export default function UsuariosPage() {
                 </DrawerFooter>
               </DrawerContent>
             </Drawer>
+
+            <Drawer open={openLink} onOpenChange={setOpenLink}>
+              <DrawerTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <LinkIcon className="h-4 w-4" />
+                  Vincular
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent className="max-h-[90vh]">
+                <DrawerHeader>
+                  <DrawerTitle>Vincular ou desvincular conta</DrawerTitle>
+                </DrawerHeader>
+                <div className="grid gap-4 p-4 overflow-y-auto max-h-[calc(90vh-160px)] pb-22">
+                  <div className="space-y-2">
+                    <Label htmlFor="vinc-user">Usuário</Label>
+                    <select id="vinc-user" className="h-9 w-full rounded-md border bg-background px-3" value={selectedUid} onChange={(e)=>setSelectedUid(e.target.value)}>
+                      <option value="">Selecione um usuário</option>
+                      {users.map(u => (
+                        <option key={u.uid} value={u.uid}>{u.nome}{u.registerId ? " — vinculado" : " — sem registro"}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {selectedUid && (()=>{
+                    const u = users.find(x=>x.uid===selectedUid)
+                    const regMap = new Map(registers.map(r=>[r.id, r.nomeCompleto]))
+                    const currentName = u?.registerId ? (regMap.get(u.registerId) || u.registerId) : null
+                    return (
+                      <div className="space-y-3">
+                        <div className="text-sm">Status atual: {currentName ? `Registro — ${currentName}` : "Sem registro"}</div>
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="vinc-reg">Selecionar registro</Label>
+                            <select id="vinc-reg" className="h-9 w-full rounded-md border bg-background px-3" value={selectedRegisterForLink} onChange={(e)=>setSelectedRegisterForLink(e.target.value)}>
+                              <option value="">Selecione um registro</option>
+                              {registers.map(r => (
+                                <option key={r.id} value={r.id}>{r.nomeCompleto}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex items-end gap-2">
+                            <Button onClick={handleLinkSelected} disabled={linkingBusy || !selectedUid || !selectedRegisterForLink || (u?.registerId === selectedRegisterForLink)} className="flex-1">{linkingBusy ? "Processando..." : (u?.registerId ? "Alterar vínculo" : "Vincular")}</Button>
+                            <Button variant="outline" onClick={handleUnlinkSelected} disabled={linkingBusy || !u?.registerId} className="flex-1">Desvincular</Button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              </DrawerContent>
+            </Drawer>
+            </div>
           </div>
         </motion.div>
 
@@ -553,13 +660,27 @@ export default function UsuariosPage() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              type="search"
+              aria-label="Buscar por nome"
+              inputMode="search"
+              autoComplete="off"
               placeholder="Buscar por nome..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="pl-9 pr-10"
             />
+            {searchInput && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => { setSearchInput(""); setSearchQuery("") }}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 w-8"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="hidden sm:flex gap-2 flex-wrap">
             <Button
               variant={filterType === "all" ? "default" : "outline"}
               size="sm"
@@ -567,7 +688,7 @@ export default function UsuariosPage() {
               className="gap-2"
             >
               <Filter className="h-3 w-3" />
-              Todos ({members.length})
+              Todos ({counts.all})
             </Button>
             <Button
               variant={filterType === "linked" ? "default" : "outline"}
@@ -576,7 +697,7 @@ export default function UsuariosPage() {
               className="gap-2"
             >
               <LinkIcon className="h-3 w-3" />
-              Vinculados ({users.filter(u => u.registerId).length})
+              Vinculados ({counts.linked})
             </Button>
             <Button
               variant={filterType === "unlinked" ? "default" : "outline"}
@@ -585,7 +706,7 @@ export default function UsuariosPage() {
               className="gap-2"
             >
               <Unlink className="h-3 w-3" />
-              Sem Registro ({users.filter(u => !u.registerId).length})
+              Sem Registro ({counts.unlinked})
             </Button>
             <Button
               variant={filterType === "noAccount" ? "default" : "outline"}
@@ -594,8 +715,28 @@ export default function UsuariosPage() {
               className="gap-2"
             >
               <UserX className="h-3 w-3" />
-              Sem Conta ({registers.filter(r => !users.find(u => u.registerId === r.id)).length})
+              Sem Conta ({counts.noAccount})
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setOpenFamilies(true)} className="gap-2">
+              <Users className="h-3 w-3" />
+              Gerenciar famílias
+            </Button>
+          </div>
+          <div className="flex sm:hidden gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Filter className="h-3 w-3" />
+                  Filtros
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem onClick={() => setFilterType("all")}>Todos ({counts.all})</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFilterType("linked")}>Vinculados ({counts.linked})</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFilterType("unlinked")}>Sem Registro ({counts.unlinked})</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFilterType("noAccount")}>Sem Conta ({counts.noAccount})</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="outline" size="sm" onClick={() => setOpenFamilies(true)} className="gap-2">
               <Users className="h-3 w-3" />
               Gerenciar famílias

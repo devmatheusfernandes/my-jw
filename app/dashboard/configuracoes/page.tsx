@@ -7,12 +7,14 @@ import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { ModeToggle } from "@/components/theme/mode-toggle"
 import { toast } from "sonner"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 
 export default function ConfiguracoesPage() {
   const [emailNotif, setEmailNotif] = React.useState(false)
   const [appNotif, setAppNotif] = React.useState(true)
   const [compactMode, setCompactMode] = React.useState(false)
   const [advancedMode, setAdvancedMode] = React.useState(false)
+  const [accent, setAccent] = React.useState<string>("default")
 
   React.useEffect(() => {
     const e = localStorage.getItem("settings.email_notif")
@@ -23,6 +25,8 @@ export default function ConfiguracoesPage() {
     if (a !== null) setAppNotif(a === "true")
     if (c !== null) setCompactMode(c === "true")
     if (adv !== null) setAdvancedMode(adv === "true")
+    const ac = localStorage.getItem("accent_theme")
+    setAccent(ac && ac.length > 0 ? ac : "default")
   }, [])
 
   function salvar() {
@@ -62,6 +66,23 @@ export default function ConfiguracoesPage() {
                 <span className="text-muted-foreground text-sm">Claro, escuro ou automático.</span>
               </div>
               <ModeToggle />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="grid gap-1">
+                <Label>Cores</Label>
+                <span className="text-muted-foreground text-sm">Laranja, rosa ou violeta.</span>
+              </div>
+              <Select value={accent} onValueChange={(v)=>{ setAccent(v); const val = v === 'default' ? '' : v; localStorage.setItem('accent_theme', val); window.dispatchEvent(new Event('accent-theme-change')); toast.success('Tema de cores atualizado') }}>
+                <SelectTrigger className="min-w-40">
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Padrão (laranja)</SelectItem>
+                  <SelectItem value="orange">Laranja</SelectItem>
+                  <SelectItem value="rose">Rosa</SelectItem>
+                  <SelectItem value="violet">Violeta</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center justify-between">
               <div className="grid gap-1">

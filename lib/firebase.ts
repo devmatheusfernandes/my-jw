@@ -408,7 +408,7 @@ export const rejectUserAccess = async (uid: string) => {
 
 export const unlinkUserFromCongregation = async (uid: string) => {
   const userRef = doc(db, 'users', uid)
-  await setDoc(userRef, { congregacaoId: null, registerCongregationId: null, registerId: null, requestCongregationStatus: 'no-congregation' }, { merge: true })
+  await setDoc(userRef, { registerCongregationId: null, registerId: null, requestCongregationStatus: 'no-congregation' }, { merge: true })
 }
 
 export const listTerritories = async (congregacaoId: string): Promise<({ id: string } & TerritoryDoc)[]> => {
