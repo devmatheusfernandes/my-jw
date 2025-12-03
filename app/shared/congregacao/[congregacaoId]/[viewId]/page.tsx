@@ -19,6 +19,7 @@ import {
   getCleaningAssignmentsMonth,
   getCarrinhoAssignmentsMonth,
   type PregacaoEntry,
+  type PregacaoFixedDoc,
   type MidweekAssignMonthDoc,
   type WeekendAssignMonthDoc,
   type CleaningAssignMonthDoc,
@@ -43,6 +44,7 @@ export default function PublicCongregacaoPage() {
   const [selectPolicy, setSelectPolicy] = React.useState<'nearest'|'first'|'last'>('nearest')
 
   const [pregMonth, setPregMonth] = React.useState<{ porDiaSemanas?: Record<string, PregacaoEntry[]>; diasAtivos?: string[] }>({ porDiaSemanas: {}, diasAtivos: [] })
+  const [pregFixed, setPregFixed] = React.useState<PregacaoFixedDoc>({ porDia: {}, diasAtivos: [] })
   const [midweeks, setMidweeks] = React.useState<Record<string, Record<string, string | undefined>>>({})
   const [weekends, setWeekends] = React.useState<Record<string, { [k: string]: string | undefined; discurso_publico_tema?: string; discurso_publico_cantico?: string; observacoes?: string }>>({})
   const [cleanWeeks, setCleanWeeks] = React.useState<Record<string, { midweek_families?: string[]; weekend_families?: string[]; observacoes?: string }>>({})
@@ -101,7 +103,8 @@ export default function PublicCongregacaoPage() {
         setValid(true)
         const regs = await listRegisters(cid)
         setRegisters(regs.map(r => ({ id: r.id, nomeCompleto: r.nomeCompleto })))
-        await getPregacaoFixed(cid)
+        const pf = await getPregacaoFixed(cid)
+        setPregFixed(pf ?? { porDia: {}, diasAtivos: [] })
       } finally {
         setLoading(false)
       }
@@ -243,10 +246,15 @@ export default function PublicCongregacaoPage() {
       const list = pregMonth.porDiaSemanas?.[d.key] || []
       const dates = weekDatesForMonth(monthId, d.key)
       const idx = dates.findIndex(dt => isSameWeek(dt, refDate))
-      const slot = idx >= 0 ? (list[idx] ? [list[idx]] : []) : []
-      return { day: d.label, slots: slot }
+      let slots: PregacaoEntry[] = []
+      if (idx >= 0 && list[idx] && (list[idx].hora || list[idx].local || list[idx].dirigenteRegisterId || list[idx].observacoes)) {
+        slots = [list[idx]]
+      } else if ((pregFixed.diasAtivos || []).includes(d.key)) {
+        slots = (pregFixed.porDia && pregFixed.porDia[d.key]) ? pregFixed.porDia[d.key] : []
+      }
+      return { day: d.label, slots }
     }).filter(x => x.slots.length > 0)
-  }, [selectedWeek, pregMonth, monthId, weekDatesForMonth, isSameWeek])
+  }, [selectedWeek, pregMonth, pregFixed, monthId, weekDatesForMonth, isSameWeek])
 
   if (loading) {
     return (
