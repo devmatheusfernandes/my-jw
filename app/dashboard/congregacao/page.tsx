@@ -14,6 +14,7 @@ import { Building, MapPin, Map, Hash, CalendarClock, Calendar, ChevronsUpDown, C
 import ImageHeader from "@/public/images/congregation/header.jpg"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 export default function CongregacaoPage() {
   const { user } = useAuth()
@@ -168,6 +169,7 @@ export default function CongregacaoPage() {
 
   const [comboOpen, setComboOpen] = React.useState(false)
   const [comboLabel, setComboLabel] = React.useState("")
+  const [comboQuery, setComboQuery] = React.useState("")
   const handleSearch = React.useCallback(async (q: string) => {
     if (!q || q.trim().length === 0) {
       setSearchResults([])
@@ -220,6 +222,16 @@ export default function CongregacaoPage() {
                 )
               )}
             </div>
+
+            {requestStatus === 'accepted' && myCongregation &&
+              ((myCongregation.locaisPregacaoAprovados || []).length === 0 && (myCongregation.locaisCarrinhoAprovados || []).length === 0) && (
+              <Alert variant="destructive">
+                <AlertTitle>Ação necessária</AlertTitle>
+                <AlertDescription>
+                  Nenhum local aprovado para saída de campo ou carrinhos. Crie locais nas informações da congregação para liberar a programação.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {requestStatus === 'pending' ? (
               <div className="text-sm text-muted-foreground">Aguardando administrador aprovar pedido</div>
@@ -465,8 +477,12 @@ export default function CongregacaoPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[280px] p-0">
-                    <Command onValueChange={(v) => handleSearch(v)}>
-                      <CommandInput placeholder="Buscar por ID, código, nome ou cidade" />
+                    <Command>
+                      <CommandInput
+                        placeholder="Buscar por ID, código, nome ou cidade"
+                        value={comboQuery}
+                        onValueChange={(v)=>{ setComboQuery(v); handleSearch(v) }}
+                      />
                       <CommandList>
                         <CommandEmpty>Nenhuma congregação encontrada.</CommandEmpty>
                         <CommandGroup>
