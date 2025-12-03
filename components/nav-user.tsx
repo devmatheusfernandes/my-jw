@@ -11,7 +11,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 
-import * as React from "react"
 import { logout } from "@/lib/firebase"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/providers/auth-provider"

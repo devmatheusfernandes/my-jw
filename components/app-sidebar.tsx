@@ -13,37 +13,57 @@ import {
   SidebarRail,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { useAuth } from "@/components/providers/auth-provider"
+import { getUserDoc } from "@/lib/firebase"
 
-const data = {
-  navMain: [
-    { title: "Início", url: "/dashboard", icon: Home, isActive: true },
-    { title: "Meu Perfil", url: "/dashboard/meu-perfil", icon: User },
-    { title: "Congregação", url: "/dashboard/congregacao", icon: Users, items: [
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { user } = useAuth()
+  const [hasCongregation, setHasCongregation] = React.useState(false)
+  React.useEffect(() => {
+    const run = async () => {
+      const uid = user?.uid
+      if (!uid) { setHasCongregation(false); return }
+      const u = await getUserDoc(uid)
+      setHasCongregation(!!u?.congregacaoId)
+    }
+    run()
+  }, [user?.uid])
+
+  const navMain = React.useMemo(() => {
+    const base = [
+      { title: "Início", url: "/dashboard", icon: Home, isActive: true },
+      { title: "Meu Perfil", url: "/dashboard/meu-perfil", icon: User },
+    ]
+    const congregacaoCollapsed = { title: "Congregação", url: "/dashboard/congregacao", icon: Users, items: [
+      { title: "Congregação", url: "/dashboard/congregacao" },
+    ] }
+    const congregacaoFull = { title: "Congregação", url: "/dashboard/congregacao", icon: Users, items: [
       { title: "Pessoas", url: "/dashboard/usuarios" },
       { title: "Congregação", url: "/dashboard/congregacao" },
       { title: "Limpeza", url: "/dashboard/limpeza" },
-    ] },
-    { title: "Reuniões", url: "/dashboard/reuniao/meio-de-semana", icon: Calendar, items: [
+    ] }
+    const settings = { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings }
+    if (!hasCongregation) {
+      return [...base, congregacaoCollapsed, settings]
+    }
+    const meetings = { title: "Reuniões", url: "/dashboard/reuniao/meio-de-semana", icon: Calendar, items: [
       { title: "Fim de semana", url: "/dashboard/reuniao/fim-de-semana" },
       { title: "Meio de semana", url: "/dashboard/reuniao/meio-de-semana" },
       { title: "Mecânicas", url: "/dashboard/reuniao/mecanicas" },
-    ] },
-    { title: "Pregação", url: "/dashboard/pregacao", icon: BaggageClaim, items: [
+    ] }
+    const pregacao = { title: "Pregação", url: "/dashboard/pregacao", icon: BaggageClaim, items: [
       { title: "Campo", url: "/dashboard/pregacao" },
       { title: "Carrinhos", url: "/dashboard/pregacao/carrinhos" },
       { title: "Territorio", url: "/dashboard/territorio" },
-    ] },
-    { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
-  ],
-}
-
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+    ] }
+    return [...base, congregacaoFull, meetings, pregacao, settings]
+  }, [hasCongregation])
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader />
 
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={navMain as any} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />
