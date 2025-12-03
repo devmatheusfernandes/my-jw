@@ -111,6 +111,7 @@ export default function CongregacaoPage() {
         fimSemanaHora,
       }, uid)
       toast.success(`Congregação criada: ${nome} (ID: ${id})`)
+      toast.info("Recarregue a página!")
       setOpen(false)
       setNome("")
       setCidade("")

@@ -68,6 +68,12 @@ export const createCongregation = async (
     createdAt: serverTimestamp(),
   });
   await setDoc(ref, { congregationId: ref.id }, { merge: true });
+  const userRef = doc(db, 'users', creatorUid)
+  await setDoc(
+    userRef,
+    { congregacaoId: ref.id, requestCongregationStatus: 'accepted' },
+    { merge: true }
+  )
   return { id: ref.id, accessCode };
 };
 

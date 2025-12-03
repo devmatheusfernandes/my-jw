@@ -1,5 +1,6 @@
 "use client"
-import { AppSidebar } from "@/components/app-sidebar"
+import dynamic from "next/dynamic"
+const AppSidebar = dynamic(() => import("@/components/app-sidebar").then(m => m.AppSidebar), { ssr: false })
 import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 
