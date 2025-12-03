@@ -18,14 +18,20 @@ import {
   getWeekendAssignmentsMonth,
   getCleaningAssignmentsMonth,
   getCarrinhoAssignmentsMonth,
+  listExternalSpeakers,
+  getMidweekScheduleMonth,
   type PregacaoEntry,
   type PregacaoFixedDoc,
   type MidweekAssignMonthDoc,
   type WeekendAssignMonthDoc,
   type CleaningAssignMonthDoc,
   type CarrinhoAssignMonthDoc,
+  type MidweekScheduleMonthDoc,
 } from "@/lib/firebase"
 import { designationLabels } from "@/types/register-labels"
+import { MidweekScheduleSimple, type MidweekIncomingType, type MidweekAssignmentsDisplay } from "@/app/dashboard/reuniao/meio-de-semana/MidweekSimple"
+import talks from "@/locales/pt-br/weekend-meeting/public-talks/public_talks.json"
+import songs from "@/locales/pt-br/songs.json"
 
 type RegisterOpt = { id: string; nomeCompleto: string }
 
@@ -40,12 +46,15 @@ export default function PublicCongregacaoPage() {
   const [fimDia, setFimDia] = React.useState<string>("domingo")
   const [registers, setRegisters] = React.useState<RegisterOpt[]>([])
   const regById = React.useMemo(() => new Map(registers.map(r => [r.id, r.nomeCompleto])), [registers])
+  const [extSpeakers, setExtSpeakers] = React.useState<{ id: string; nome: string }[]>([])
+  const extById = React.useMemo(() => new Map(extSpeakers.map(e => [e.id, e.nome])), [extSpeakers])
   const [selectedWeek, setSelectedWeek] = React.useState<string>("")
   const [selectPolicy, setSelectPolicy] = React.useState<'nearest'|'first'|'last'>('nearest')
 
   const [pregMonth, setPregMonth] = React.useState<{ porDiaSemanas?: Record<string, PregacaoEntry[]>; diasAtivos?: string[] }>({ porDiaSemanas: {}, diasAtivos: [] })
   const [pregFixed, setPregFixed] = React.useState<PregacaoFixedDoc>({ porDia: {}, diasAtivos: [] })
   const [midweeks, setMidweeks] = React.useState<Record<string, Record<string, string | undefined>>>({})
+  const [midSchedule, setMidSchedule] = React.useState<Record<string, MidweekIncomingType>>({})
   const [weekends, setWeekends] = React.useState<Record<string, { [k: string]: string | undefined; discurso_publico_tema?: string; discurso_publico_cantico?: string; observacoes?: string }>>({})
   const [cleanWeeks, setCleanWeeks] = React.useState<Record<string, { midweek_families?: string[]; weekend_families?: string[]; observacoes?: string }>>({})
   const [carrinhos, setCarrinhos] = React.useState<Record<string, { slots?: { start: string; location?: string; participants?: string[]; observacoes?: string }[] }>>({})
@@ -103,6 +112,10 @@ export default function PublicCongregacaoPage() {
         setValid(true)
         const regs = await listRegisters(cid)
         setRegisters(regs.map(r => ({ id: r.id, nomeCompleto: r.nomeCompleto })))
+        try {
+          const exts = await listExternalSpeakers(cid)
+          setExtSpeakers(exts.map(x => ({ id: x.id, nome: x.nome })))
+        } catch {}
         const pf = await getPregacaoFixed(cid)
         setPregFixed(pf ?? { porDia: {}, diasAtivos: [] })
       } finally {
@@ -116,6 +129,7 @@ export default function PublicCongregacaoPage() {
     const run = async () => {
       const cid = params.congregacaoId
       if (!cid || !valid) return
+      const sched: MidweekScheduleMonthDoc | null = await getMidweekScheduleMonth(monthId)
       const mid: MidweekAssignMonthDoc | null = await getMidweekAssignmentsMonth(cid, monthId)
       const wk: WeekendAssignMonthDoc | null = await getWeekendAssignmentsMonth(cid, monthId)
       const cl: CleaningAssignMonthDoc | null = await getCleaningAssignmentsMonth(cid, monthId)
@@ -129,7 +143,10 @@ export default function PublicCongregacaoPage() {
       if (cl?.weeks) Object.entries(cl.weeks).forEach(([k,v])=>{ normCl[String(k).replace(/-/g,'/')] = v })
       const normCar: Record<string, { slots?: { start: string; location?: string; participants?: string[]; observacoes?: string }[] }> = {}
       if (car?.weeks) Object.entries(car.weeks).forEach(([k,v])=>{ normCar[String(k).replace(/-/g,'/')] = v })
+      const normSched: Record<string, MidweekIncomingType> = {}
+      if (sched?.weeks && Array.isArray(sched.weeks)) (sched.weeks as MidweekIncomingType[]).forEach((w) => { const key = String(w.week_date || '').replace(/-/g,'/'); if (key) normSched[key] = w })
       setMidweeks(normMid); setWeekends(normWk); setCleanWeeks(normCl); setCarrinhos(normCar)
+      setMidSchedule(normSched)
       setPregMonth({ porDiaSemanas: pm?.porDiaSemanas || {}, diasAtivos: pm?.diasAtivos || [] })
       let allWeeks = Array.from(new Set<string>([...Object.keys(normMid), ...Object.keys(normWk), ...Object.keys(normCl), ...Object.keys(normCar)])).sort((a,b)=>a.localeCompare(b))
       if (allWeeks.length === 0) {
@@ -211,32 +228,22 @@ export default function PublicCongregacaoPage() {
   
   const prevWeek = React.useCallback(() => {
     if (!selectedWeek) return
-    const keys = weekKeys.length > 0 ? weekKeys : allWeeksForMonth(monthId)
-    const idx = keys.findIndex(w => w === selectedWeek)
-    if (idx <= 0) {
-      const pm = prevMonthId(monthId)
-      setSelectPolicy('last')
-      setMonthId(pm)
-      return
-    }
-    const target = keys[idx-1]
-    if (!target) return
-    setSelectedWeek(target)
-  }, [selectedWeek, weekKeys, monthId, allWeeksForMonth, prevMonthId])
+    const dt = toDate(selectedWeek)
+    const nd = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() - 7)
+    const nextSel = formatYmdSlash(nd)
+    setSelectedWeek(nextSel)
+    const mid = `${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}`
+    if (monthId !== mid) setMonthId(mid)
+  }, [selectedWeek, toDate, formatYmdSlash, monthId])
   const nextWeek = React.useCallback(() => {
     if (!selectedWeek) return
-    const keys = weekKeys.length > 0 ? weekKeys : allWeeksForMonth(monthId)
-    const idx = keys.findIndex(w => w === selectedWeek)
-    if (idx >= keys.length-1) {
-      const nm = nextMonthId(monthId)
-      setSelectPolicy('first')
-      setMonthId(nm)
-      return
-    }
-    const target = keys[idx+1]
-    if (!target) return
-    setSelectedWeek(target)
-  }, [selectedWeek, weekKeys, monthId, allWeeksForMonth, nextMonthId])
+    const dt = toDate(selectedWeek)
+    const nd = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + 7)
+    const nextSel = formatYmdSlash(nd)
+    setSelectedWeek(nextSel)
+    const mid = `${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}`
+    if (monthId !== mid) setMonthId(mid)
+  }, [selectedWeek, toDate, formatYmdSlash, monthId])
 
 
   const weeklyPregacaoSlots = React.useMemo(() => {
@@ -255,6 +262,63 @@ export default function PublicCongregacaoPage() {
       return { day: d.label, slots }
     }).filter(x => x.slots.length > 0)
   }, [selectedWeek, pregMonth, pregFixed, monthId, weekDatesForMonth, isSameWeek])
+
+  const midWeekKey = React.useMemo(() => {
+    if (!selectedWeek) return ""
+    const refDate = toDate(selectedWeek)
+    const dates = weekDatesForMonth(monthId, meioDia)
+    const dt = dates.find(d => isSameWeek(d, refDate))
+    return dt ? formatYmdSlash(dt) : selectedWeek
+  }, [selectedWeek, monthId, meioDia, weekDatesForMonth, isSameWeek, formatYmdSlash, toDate])
+
+  const wkWeekKey = React.useMemo(() => {
+    if (!selectedWeek) return ""
+    const refDate = toDate(selectedWeek)
+    const dates = weekDatesForMonth(monthId, fimDia)
+    const dt = dates.find(d => isSameWeek(d, refDate))
+    return dt ? formatYmdSlash(dt) : selectedWeek
+  }, [selectedWeek, monthId, fimDia, weekDatesForMonth, isSameWeek, formatYmdSlash, toDate])
+
+  const midWeekLabel = React.useMemo(() => {
+    if (!selectedWeek) return ''
+    const refDate = toDate(selectedWeek)
+    const dates = weekDatesForMonth(monthId, meioDia)
+    const dt = dates.find(d => isSameWeek(d, refDate))
+    return dt ? weekLabel(formatYmdSlash(dt)) : weekLabel(selectedWeek)
+  }, [selectedWeek, monthId, meioDia, weekDatesForMonth, isSameWeek, weekLabel, toDate, formatYmdSlash])
+
+  const wkWeekLabel = React.useMemo(() => {
+    if (!selectedWeek) return ''
+    const refDate = toDate(selectedWeek)
+    const dates = weekDatesForMonth(monthId, fimDia)
+    const dt = dates.find(d => isSameWeek(d, refDate))
+    return dt ? weekLabel(formatYmdSlash(dt)) : weekLabel(selectedWeek)
+  }, [selectedWeek, monthId, fimDia, weekDatesForMonth, isSameWeek, weekLabel, toDate, formatYmdSlash])
+
+  const resolveWeekKeyFn = React.useCallback((keys: string[], sel: string) => {
+    if (!sel) return ''
+    const t = toDate(sel)
+    const found = keys.find(k => isSameWeek(toDate(k), t))
+    return found || ''
+  }, [toDate, isSameWeek])
+
+  const midAssignResolved = React.useMemo(() => {
+    const keys = Object.keys(midweeks)
+    return resolveWeekKeyFn(keys, selectedWeek) || midWeekKey
+  }, [midweeks, selectedWeek, resolveWeekKeyFn, midWeekKey])
+
+  const wkAssignResolved = React.useMemo(() => {
+    const keys = Object.keys(weekends)
+    return resolveWeekKeyFn(keys, selectedWeek) || wkWeekKey
+  }, [weekends, selectedWeek, resolveWeekKeyFn, wkWeekKey])
+
+  const midAssignNames = React.useMemo(() => {
+    const a = midweeks[midAssignResolved] || midweeks[midWeekKey] || (selectedWeek ? midweeks[selectedWeek] : undefined)
+    if (!a) return undefined
+    const out: Record<string, string | undefined> = {}
+    Object.entries(a).forEach(([k, v]) => { out[k] = typeof v === 'string' ? (regById.get(v) || v) : undefined })
+    return out as MidweekAssignmentsDisplay
+  }, [midweeks, midAssignResolved, regById])
 
   if (loading) {
     return (
@@ -368,15 +432,19 @@ export default function PublicCongregacaoPage() {
               <div className="font-semibold flex items-center gap-2"><CalendarIcon className="h-4 w-4 text-primary" /> Meio de semana — {meioDia}</div>
             </div>
             <div className="p-3 sm:p-4">
-              {selectedWeek && midweeks[selectedWeek] ? (
-                <motion.div initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="rounded-md border p-3 text-sm">
-                  <div className="font-medium">{weekLabel(selectedWeek)}</div>
-                  <ul className="mt-2 space-y-1">
-                    {Object.entries(midweeks[selectedWeek]).filter(([k]) => k!=="week_type").map(([k, v]) => (
-                      <li key={k} className="flex items-center gap-2">• <span>{designationLabels[k] || k}:</span> <span className="text-muted-foreground">{typeof v === 'string' ? (regById.get(v) || v) : ''}</span></li>
-                    ))}
-                  </ul>
-                </motion.div>
+              {midAssignResolved && midweeks[midAssignResolved] ? (
+                midSchedule[midAssignResolved] ? (
+                  <MidweekScheduleSimple data={midSchedule[midAssignResolved]} assignments={midAssignNames} />
+                ) : (
+                  <motion.div initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="rounded-md border p-3 text-sm">
+                    <div className="font-medium">{midAssignResolved ? weekLabel(midAssignResolved) : midWeekLabel}</div>
+                    <ul className="mt-2 space-y-1">
+                      {Object.entries(midweeks[midAssignResolved]).filter(([k]) => k!=="week_type").map(([k, v]) => (
+                        <li key={k} className="flex items-center gap-2">• <span>{designationLabels[k] || k}:</span> <span className="text-muted-foreground">{typeof v === 'string' ? (regById.get(v) || v) : ''}</span></li>
+                      ))}
+                    </ul>
+                  </motion.div>
+                )
               ) : (
                 <div className="text-sm text-muted-foreground">Nenhuma designação neste mês</div>
               )}
@@ -388,17 +456,20 @@ export default function PublicCongregacaoPage() {
               <div className="font-semibold flex items-center gap-2"><CalendarIcon className="h-4 w-4 text-primary" /> Fim de semana — {fimDia}</div>
             </div>
             <div className="p-3 sm:p-4">
-              {selectedWeek && weekends[selectedWeek] ? (
+              {wkAssignResolved && weekends[wkAssignResolved] ? (
                 <motion.div initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="rounded-md border p-3 text-sm">
-                  <div className="font-medium">{weekLabel(selectedWeek)}</div>
+                  <div className="font-medium">{wkAssignResolved ? weekLabel(wkAssignResolved) : wkWeekLabel}</div>
                   <ul className="mt-2 space-y-1">
-                    {Object.entries(weekends[selectedWeek]).map(([k, v]) => {
-                      if (k === 'discurso_publico_tema' || k === 'discurso_publico_cantico' || k === 'observacoes') {
-                        return (<li key={k} className="flex items-center gap-2">• <span>{designationLabels[k] || k}:</span> <span className="text-muted-foreground">{String(v||'')}</span></li>)
-                      }
-                      const name = typeof v === 'string' ? (regById.get(v) || v) : ''
-                      return (<li key={k} className="flex items-center gap-2">• <span>{designationLabels[k] || k}:</span> <span className="text-muted-foreground">{name}</span></li>)
-                    })}
+                    <li className="flex items-center gap-2">• <span>{designationLabels.presidente_fim_semana}</span> <span className="text-muted-foreground">{regById.get(weekends[wkAssignResolved]!.presidente_fim_semana || '') || '—'}</span></li>
+                    <li className="flex items-center gap-2">• <span>{designationLabels.dirigente_sentinela}</span> <span className="text-muted-foreground">{regById.get(weekends[wkAssignResolved]!.dirigente_sentinela || '') || '—'}</span></li>
+                    <li className="flex items-center gap-2">• <span>{designationLabels.leitor_sentinela}</span> <span className="text-muted-foreground">{regById.get(weekends[wkAssignResolved]!.leitor_sentinela || '') || '—'}</span></li>
+                    <li className="flex items-center gap-2">• <span>{designationLabels.discurso_publico}</span> <span className="text-muted-foreground">{(weekends[wkAssignResolved]!.orador_tipo === 'externo') ? (extById.get(weekends[wkAssignResolved]!.orador_externo_id || '') || '—') : (regById.get(weekends[wkAssignResolved]!.orador_register_id || '') || '—')}</span></li>
+                    <li className="flex items-center gap-2">• <span>Cântico:</span> <span className="text-muted-foreground">{(() => { const c = weekends[wkAssignResolved]!.discurso_publico_cantico || ''; return (songs as any)[c] || '—' })()}</span></li>
+                    <li className="flex items-center gap-2">• <span>Tema do discurso:</span> <span className="text-muted-foreground">{(() => { const t = weekends[wkAssignResolved]!.discurso_publico_tema || ''; return (talks as any)[t] || '—' })()}</span></li>
+                    <li className="flex items-center gap-2">• <span>Hospitalidade (família):</span> <span className="text-muted-foreground">{regById.get(weekends[wkAssignResolved]!.hospitalidade_register_id || '') || '—'}</span></li>
+                    {weekends[wkAssignResolved]!.observacoes ? (
+                      <li className="flex items-center gap-2">• <span>Observações:</span> <span className="text-muted-foreground">{String(weekends[wkAssignResolved]!.observacoes || '')}</span></li>
+                    ) : null}
                   </ul>
                 </motion.div>
               ) : (
@@ -412,14 +483,27 @@ export default function PublicCongregacaoPage() {
               <div className="font-semibold flex items-center gap-2"><Wrench className="h-4 w-4 text-primary" /> Mecânicas</div>
             </div>
             <div className="p-3 sm:p-4">
-              {selectedWeek && weekends[selectedWeek] ? (
+              {(midAssignResolved && midweeks[midAssignResolved]) || (wkAssignResolved && weekends[wkAssignResolved]) ? (
                 <motion.div initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="rounded-md border p-3 text-sm">
-                  <div className="font-medium">{weekLabel(selectedWeek)}</div>
-                  <ul className="mt-2 space-y-1">
-                    {['audio_video','volante','palco','indicador_porta','indicador_palco'].map((k) => (
-                      <li key={k} className="flex items-center gap-2">• <span>{designationLabels[k] || k}:</span> <span className="text-muted-foreground">{weekends[selectedWeek] && weekends[selectedWeek]![k] ? (regById.get(weekends[selectedWeek]![k]!) || weekends[selectedWeek]![k]!) : '—'}</span></li>
-                    ))}
-                  </ul>
+                  <div className="font-medium">{selectedWeek ? weekLabel(selectedWeek) : wkWeekLabel}</div>
+                  <div className="mt-2 grid gap-2 md:grid-cols-2">
+                    <div>
+                      <div className="text-xs font-medium">Meio de semana</div>
+                      <ul className="mt-1.5 space-y-1">
+                        {['audio_video','volante','palco','indicador_porta','indicador_palco'].map((k) => (
+                          <li key={k} className="flex items-center gap-2">• <span>{designationLabels[k] || k}:</span> <span className="text-muted-foreground">{midAssignResolved && midweeks[midAssignResolved] && midweeks[midAssignResolved]![k] ? (regById.get(midweeks[midAssignResolved]![k]!) || midweeks[midAssignResolved]![k]!) : '—'}</span></li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium">Fim de semana</div>
+                      <ul className="mt-1.5 space-y-1">
+                        {['audio_video','volante','palco','indicador_porta','indicador_palco'].map((k) => (
+                          <li key={k} className="flex items-center gap-2">• <span>{designationLabels[k] || k}:</span> <span className="text-muted-foreground">{wkAssignResolved && weekends[wkAssignResolved] && weekends[wkAssignResolved]![k] ? (regById.get(weekends[wkAssignResolved]![k]!) || weekends[wkAssignResolved]![k]!) : '—'}</span></li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 </motion.div>
               ) : (
                 <div className="text-sm text-muted-foreground">Nenhuma mecânica cadastrada nesta semana</div>
