@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { useAuth } from "@/components/providers/auth-provider"
-import { createCongregation, requestCongregationAccess, searchCongregations, getUserDoc, getCongregationDoc, updateCongregation, getRegisterDoc, type CongregationWithId } from "@/lib/firebase"
+import { createCongregation, requestCongregationAccess, searchCongregations, getUserDoc, getCongregationDoc, updateCongregation, getRegisterDoc, listRegisters, listCongregationEvents, createCongregationEvent, deleteCongregationEvent, type CongregationWithId, type CongregationEventDoc } from "@/lib/firebase"
 import { motion } from "framer-motion"
 import Image from "next/image"
 import { Building, MapPin, Map, Hash, CalendarClock, Calendar, ChevronsUpDown, Check } from "lucide-react"
@@ -36,6 +36,7 @@ export default function CongregacaoPage() {
   const [myCongregation, setMyCongregation] = React.useState<CongregationWithId | null>(null)
   const [isAdmin, setIsAdmin] = React.useState(false)
   const [isElder, setIsElder] = React.useState(false)
+  const [myRegister, setMyRegister] = React.useState<({ id: string } & any) | null>(null)
   const [loadingMyCongregation, setLoadingMyCongregation] = React.useState(true)
   const [requestStatus, setRequestStatus] = React.useState<string | null>(null)
   const [editing, setEditing] = React.useState(false)
@@ -55,6 +56,19 @@ export default function CongregacaoPage() {
   const [publicViewId, setPublicViewId] = React.useState<string>("")
   const [shareUrl, setShareUrl] = React.useState<string>("")
 
+  const [events, setEvents] = React.useState<({ id: string } & CongregationEventDoc)[]>([])
+  const [loadingEvents, setLoadingEvents] = React.useState(false)
+  const [registers, setRegisters] = React.useState<({ id: string; nomeCompleto: string })[]>([])
+  const [openAddEvent, setOpenAddEvent] = React.useState(false)
+  const [evtTitulo, setEvtTitulo] = React.useState("")
+  const [evtStart, setEvtStart] = React.useState("")
+  const [evtDuracao, setEvtDuracao] = React.useState<'um_dia' | 'tres_dias' | 'semana_terca_a_domingo' | 'personalizada'>('um_dia')
+  const [evtEnd, setEvtEnd] = React.useState("")
+  const [evtAudienceType, setEvtAudienceType] = React.useState<'todos' | 'pioneiros_regulares' | 'privilegio' | 'responsabilidade' | 'designacao' | 'registros'>('todos')
+  const [evtAudienceValue, setEvtAudienceValue] = React.useState<string>("")
+  const [evtAudienceRegisters, setEvtAudienceRegisters] = React.useState<string[]>([])
+  const [evtObs, setEvtObs] = React.useState("")
+
   React.useEffect(() => {
     const run = async () => {
       try {
@@ -72,6 +86,7 @@ export default function CongregacaoPage() {
           if (u.registerCongregationId && u.registerId && u.registerCongregationId === u.congregacaoId) {
             const reg = await getRegisterDoc(u.registerCongregationId, u.registerId)
             setIsElder(reg?.privilegioServico === 'anciao')
+            setMyRegister(reg)
           }
           setEditNome(c.nome)
           setEditCidade(c.cidade)
@@ -93,6 +108,113 @@ export default function CongregacaoPage() {
     }
     run()
   }, [user])
+
+  React.useEffect(() => {
+    const run = async () => {
+      try {
+        if (!myCongregationId) return
+        setLoadingEvents(true)
+        const [evs, regs] = await Promise.all([
+          listCongregationEvents(myCongregationId),
+          listRegisters(myCongregationId)
+        ])
+        setEvents(evs)
+        setRegisters(regs.map(r => ({ id: r.id, nomeCompleto: r.nomeCompleto })))
+      } finally {
+        setLoadingEvents(false)
+      }
+    }
+    run()
+  }, [myCongregationId])
+
+  const prefillQuick = React.useCallback((titulo: string, dur: 'um_dia' | 'tres_dias' | 'semana_terca_a_domingo') => {
+    setEvtTitulo(titulo)
+    setEvtDuracao(dur)
+    setOpenAddEvent(true)
+  }, [])
+
+  const computeEndDate = React.useCallback((start: string, dur: 'um_dia' | 'tres_dias' | 'semana_terca_a_domingo' | 'personalizada', endIn?: string) => {
+    if (!start) return ''
+    if (dur === 'personalizada') return endIn || start
+    const d = new Date(start)
+    if (Number.isNaN(d.getTime())) return start
+    if (dur === 'um_dia') return start
+    if (dur === 'tres_dias') {
+      const e = new Date(d)
+      e.setDate(e.getDate() + 2)
+      return e.toISOString().slice(0,10)
+    }
+    const day = d.getDay()
+    const diffToSunday = (7 - day) % 7
+    const e = new Date(d)
+    e.setDate(e.getDate() + diffToSunday)
+    return e.toISOString().slice(0,10)
+  }, [])
+
+  React.useEffect(() => {
+    setEvtEnd(computeEndDate(evtStart, evtDuracao, evtEnd))
+  }, [evtStart, evtDuracao])
+
+  const audienceLabel = React.useCallback((a: CongregationEventDoc['audience']) => {
+    if (a.type === 'todos') return 'Todos'
+    if (a.type === 'pioneiros_regulares') return 'Pioneiros regulares'
+    if (a.type === 'privilegio') return `Privilégio: ${a.value}`
+    if (a.type === 'responsabilidade') return `Responsabilidade: ${a.value}`
+    if (a.type === 'designacao') return `Designação: ${a.value}`
+    if (a.type === 'registros') return 'Registros específicos'
+    return 'Audiência'
+  }, [])
+
+  const eventVisibleFor = React.useCallback((e: CongregationEventDoc, r: any | null) => {
+    if (e.audience.type === 'todos') return true
+    if (!r) return false
+    if (e.audience.type === 'pioneiros_regulares') return !!r.outrosPrivilegios?.pioneiroRegular
+    if (e.audience.type === 'privilegio') return (r.privilegioServico || null) === e.audience.value
+    if (e.audience.type === 'responsabilidade') return (r.responsabilidades || []).includes(String(e.audience.value))
+    if (e.audience.type === 'designacao') return (r.designacoesAprovadas || []).includes(String(e.audience.value))
+    if (e.audience.type === 'registros') return Array.isArray(e.audience.value) && (e.audience.value as string[]).includes(r.id)
+    return true
+  }, [])
+
+  const handleAddEvent = React.useCallback(async () => {
+    if (!myCongregationId) return
+    const endDate = computeEndDate(evtStart, evtDuracao, evtEnd)
+    const audience: CongregationEventDoc['audience'] = evtAudienceType === 'registros'
+      ? { type: 'registros', value: evtAudienceRegisters }
+      : { type: evtAudienceType, value: evtAudienceValue || undefined }
+    const payload: CongregationEventDoc = {
+      titulo: evtTitulo.trim(),
+      startDate: evtStart,
+      endDate,
+      allDay: true,
+      audience,
+      observacoes: evtObs || undefined,
+      createdBy: user?.uid || undefined,
+    }
+    try {
+      if (!payload.titulo || !payload.startDate) { toast.error('Preencha título e data'); return }
+      await createCongregationEvent(myCongregationId, payload)
+      const evs = await listCongregationEvents(myCongregationId)
+      setEvents(evs)
+      setOpenAddEvent(false)
+      setEvtTitulo(''); setEvtStart(''); setEvtDuracao('um_dia'); setEvtEnd(''); setEvtAudienceType('todos'); setEvtAudienceValue(''); setEvtAudienceRegisters([]); setEvtObs('')
+      toast.success('Evento criado')
+    } catch {
+      toast.error('Falha ao criar evento')
+    }
+  }, [myCongregationId, evtTitulo, evtStart, evtDuracao, evtEnd, evtAudienceType, evtAudienceValue, evtAudienceRegisters, evtObs, computeEndDate, user?.uid])
+
+  const handleDeleteEvent = React.useCallback(async (id: string) => {
+    if (!myCongregationId) return
+    try {
+      await deleteCongregationEvent(myCongregationId, id)
+      const evs = await listCongregationEvents(myCongregationId)
+      setEvents(evs)
+      toast.success('Evento removido')
+    } catch {
+      toast.error('Falha ao remover')
+    }
+  }, [myCongregationId])
 
   const handleCreate = async () => {
     try {
@@ -399,6 +521,176 @@ export default function CongregacaoPage() {
             )}
           </div>
         </motion.div>
+
+        {requestStatus === 'accepted' && myCongregation ? (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-lg border bg-card overflow-hidden">
+            <div className="px-4 py-3 border-b bg-muted/30 flex items-center justify-between">
+              <div className="font-semibold flex items-center gap-2"><Calendar className="h-4 w-4 text-primary" /> Eventos</div>
+              {isElder && (
+                <Drawer open={openAddEvent} onOpenChange={setOpenAddEvent}>
+                  <DrawerTrigger asChild>
+                    <Button className="gap-2">Adicionar</Button>
+                  </DrawerTrigger>
+                  <DrawerContent>
+                    <DrawerHeader>
+                      <DrawerTitle>Novo evento</DrawerTitle>
+                    </DrawerHeader>
+                    <div className="grid gap-4 p-4 md:grid-cols-2">
+                      <div className="md:col-span-2 grid gap-2">
+                        <div className="text-sm font-medium">Sugestões rápidas</div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" onClick={()=>prefillQuick('Assembleia de circuito (representante de Betel)', 'um_dia')}>Assembleia (Betel)</Button>
+                          <Button variant="outline" size="sm" onClick={()=>prefillQuick('Assembleia de circuito (superintendente)', 'um_dia')}>Assembleia (SC)</Button>
+                          <Button variant="outline" size="sm" onClick={()=>prefillQuick('Congresso regional', 'tres_dias')}>Congresso regional</Button>
+                          <Button variant="outline" size="sm" onClick={()=>prefillQuick('Visita do superintendente de circuito', 'semana_terca_a_domingo')}>Visita do SC</Button>
+                          <Button variant="outline" size="sm" onClick={()=>prefillQuick('Celebração da morte de Cristo', 'um_dia')}>Celebração</Button>
+                          <Button variant="outline" size="sm" onClick={()=>prefillQuick('Reunião anual com os pioneiros', 'um_dia')}>Pioneiros — Reunião</Button>
+                          <Button variant="outline" size="sm" onClick={()=>prefillQuick('Pioneiros regulares com os anciãos', 'um_dia')}>Pioneiros — Anciãos</Button>
+                        </div>
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Título</Label>
+                        <Input value={evtTitulo} onChange={(e)=>setEvtTitulo(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Início</Label>
+                        <Input type="date" value={evtStart} onChange={(e)=>setEvtStart(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Duração</Label>
+                        <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={evtDuracao} onChange={(e)=>setEvtDuracao(e.target.value as any)}>
+                          <option value="um_dia">Um dia</option>
+                          <option value="tres_dias">Três dias</option>
+                          <option value="semana_terca_a_domingo">Semana (terça a domingo)</option>
+                          <option value="personalizada">Personalizada</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Término</Label>
+                        <Input type="date" value={evtEnd} onChange={(e)=>setEvtEnd(e.target.value)} disabled={evtDuracao!=='personalizada'} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Audicência</Label>
+                        <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={evtAudienceType} onChange={(e)=>{ setEvtAudienceType(e.target.value as any); setEvtAudienceValue(''); setEvtAudienceRegisters([]) }}>
+                          <option value="todos">Todos</option>
+                          <option value="pioneiros_regulares">Pioneiros regulares</option>
+                          <option value="privilegio">Privilégio de serviço</option>
+                          <option value="responsabilidade">Responsabilidade</option>
+                          <option value="designacao">Designação aprovada</option>
+                          <option value="registros">Registros específicos</option>
+                        </select>
+                      </div>
+                      {evtAudienceType === 'privilegio' && (
+                        <div className="space-y-2">
+                          <Label>Privilégio</Label>
+                          <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={evtAudienceValue} onChange={(e)=>setEvtAudienceValue(e.target.value)}>
+                            <option value="">Selecione</option>
+                            <option value="servo_ministerial">Servo ministerial</option>
+                            <option value="anciao">Ancião</option>
+                          </select>
+                        </div>
+                      )}
+                      {evtAudienceType === 'responsabilidade' && (
+                        <div className="space-y-2">
+                          <Label>Responsabilidade</Label>
+                          <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={evtAudienceValue} onChange={(e)=>setEvtAudienceValue(e.target.value)}>
+                            <option value="">Selecione</option>
+                            <option value="coordenador">Coordenador</option>
+                            <option value="secretario">Secretário</option>
+                            <option value="superintendente_servico">Superintendente de serviço</option>
+                            <option value="superintendente_audio_video">Superintendente de áudio e vídeo</option>
+                            <option value="superintendente_vida_ministerio">Superintendente Vida e Ministério</option>
+                            <option value="superintendente_discursos_publicos">Superintendente de discursos públicos</option>
+                            <option value="servo_contas">Servo de contas</option>
+                            <option value="servo_publicacoes">Servo de publicações</option>
+                            <option value="servo_carrinho">Servo do carrinho</option>
+                            <option value="servo_territorio">Servo de território</option>
+                            <option value="servo_limpeza">Servo de limpeza</option>
+                            <option value="servo_quadro_anuncios">Servo de quadro de anúncios</option>
+                            <option value="servo_audio_video">Servo de áudio e vídeo</option>
+                            <option value="servo_discursos">Servo de discursos</option>
+                          </select>
+                        </div>
+                      )}
+                      {evtAudienceType === 'designacao' && (
+                        <div className="space-y-2">
+                          <Label>Designação</Label>
+                          <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={evtAudienceValue} onChange={(e)=>setEvtAudienceValue(e.target.value)}>
+                            <option value="">Selecione</option>
+                            <option value="dirigir_reuniao_de_campo">Dirigente de Campo</option>
+                            <option value="leitura_biblia">Leitura da Bíblia</option>
+                            <option value="iniciando_conversas">Iniciando conversas</option>
+                            <option value="cultivando_interesse">Cultivando interesse</option>
+                            <option value="fazendo_discipulos">Fazendo discípulos</option>
+                            <option value="explicando_crencas_demonstracao">Explicando suas crenças (demonstração)</option>
+                            <option value="explicando_crencas_discurso">Explicando suas crenças (discurso)</option>
+                            <option value="discurso">Discurso</option>
+                            <option value="audio_video">Áudio e vídeo</option>
+                            <option value="volante">Volante</option>
+                            <option value="palco">Palco</option>
+                            <option value="indicador_porta">Indicador (porta)</option>
+                            <option value="indicador_palco">Indicador (palco)</option>
+                            <option value="discurso_tesouros">Tesouros</option>
+                            <option value="joias_espirituais">Joias espirituais</option>
+                            <option value="leitor_do_estudo">Leitor do estudo</option>
+                            <option value="estudo_biblico_congregacao">Estudo bíblico</option>
+                            <option value="nossa_vida_crista">Nossa vida cristã</option>
+                            <option value="presidente_meio_semana">Presidente meio de semana</option>
+                            <option value="presidente_fim_semana">Presidente fim de semana</option>
+                            <option value="leitor_sentinela">Leitor da Sentinela</option>
+                            <option value="dirigente_sentinela">Dirigente da Sentinela</option>
+                            <option value="discurso_publico">Discurso público</option>
+                          </select>
+                        </div>
+                      )}
+                      {evtAudienceType === 'registros' && (
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Registros</Label>
+                          <select multiple className="h-24 w-full rounded-md border bg-background px-3 text-sm" value={evtAudienceRegisters} onChange={(e)=>{ const opts = Array.from(e.target.selectedOptions).map(o=>o.value); setEvtAudienceRegisters(opts) }}>
+                            {registers.map(r => (<option key={r.id} value={r.id}>{r.nomeCompleto}</option>))}
+                          </select>
+                        </div>
+                      )}
+                      <div className="md:col-span-2 space-y-2">
+                        <Label>Observações</Label>
+                        <Input value={evtObs} onChange={(e)=>setEvtObs(e.target.value)} />
+                      </div>
+                    </div>
+                    <DrawerFooter>
+                      <div className="flex gap-2">
+                        <Button onClick={handleAddEvent}>Salvar</Button>
+                        <Button variant="outline" onClick={()=>setOpenAddEvent(false)}>Cancelar</Button>
+                      </div>
+                    </DrawerFooter>
+                  </DrawerContent>
+                </Drawer>
+              )}
+            </div>
+            <div className="p-3 sm:p-4">
+              {loadingEvents ? (
+                <div className="text-sm text-muted-foreground">Carregando eventos...</div>
+              ) : (
+                <div className="grid gap-2">
+                  {events.filter(e => eventVisibleFor(e, myRegister)).length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Nenhum evento</div>
+                  ) : (
+                    events.filter(e => eventVisibleFor(e, myRegister)).map((e) => (
+                      <motion.div key={e.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-md border p-3 text-sm">
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium">{e.titulo}</div>
+                          {isElder ? (<Button variant="outline" size="sm" className="h-8" onClick={()=>handleDeleteEvent(e.id)}>Remover</Button>) : null}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{e.startDate}{e.endDate && e.endDate !== e.startDate ? ` — ${e.endDate}` : ''}</div>
+                        <div className="text-xs">Audiência: {audienceLabel(e.audience)}</div>
+                        {e.observacoes ? (<div className="text-xs text-muted-foreground">Obs.: {e.observacoes}</div>) : null}
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        ) : null}
 
         {requestStatus !== 'accepted' && requestStatus !== 'pending' ? (
           <div className="grid gap-4 md:grid-cols-2">

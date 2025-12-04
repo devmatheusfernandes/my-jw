@@ -531,6 +531,41 @@ export const logout = async () => {
   }
 };
 
+export type CongregationEventDoc = {
+  titulo: string
+  startDate: string
+  endDate?: string
+  allDay?: boolean
+  audience: { type: 'todos' | 'pioneiros_regulares' | 'privilegio' | 'responsabilidade' | 'designacao' | 'registros'; value?: string | string[] }
+  observacoes?: string
+  createdBy?: string
+  createdAt?: unknown
+}
+
+export const listCongregationEvents = async (congregacaoId: string): Promise<({ id: string } & CongregationEventDoc)[]> => {
+  const snap = await getDocs(collection(db, 'congregations', congregacaoId, 'events'))
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as CongregationEventDoc) }))
+}
+
+export const createCongregationEvent = async (congregacaoId: string, data: CongregationEventDoc) => {
+  const clean: CongregationEventDoc = JSON.parse(JSON.stringify(data || {}))
+  const ref = await addDoc(collection(db, 'congregations', congregacaoId, 'events'), {
+    ...clean,
+    createdAt: serverTimestamp(),
+  })
+  return { id: ref.id }
+}
+
+export const updateCongregationEvent = async (congregacaoId: string, eventId: string, data: Partial<CongregationEventDoc>) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'events', eventId)
+  await setDoc(ref, JSON.parse(JSON.stringify(data || {})), { merge: true })
+}
+
+export const deleteCongregationEvent = async (congregacaoId: string, eventId: string) => {
+  const ref = doc(db, 'congregations', congregacaoId, 'events', eventId)
+  await deleteDoc(ref)
+}
+
 export type PregacaoEntry = {
   hora: string
   local: string

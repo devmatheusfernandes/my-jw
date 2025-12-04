@@ -59,6 +59,11 @@ service cloud.firestore {
         allow read: if isAuthed() || (get(/databases/$(database)/documents/congregations/$(id)).data.assignmentsSharedOpen == true)
         allow write: if isAdminOf(id) || isElderOf(id)
       }
+
+      match /events/{eventId} {
+        allow read: if isAuthed()
+        allow write: if isAdminOf(id) || isElderOf(id)
+      }
     }
 
     match /global_midweek_schedule_pt/{monthId} {
