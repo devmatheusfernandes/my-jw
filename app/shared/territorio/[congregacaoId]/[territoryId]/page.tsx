@@ -26,10 +26,14 @@ export default function SharedTerritoryPage() {
   const [observacoes, setObservacoes] = React.useState("")
   const [fullImage, setFullImage] = React.useState(false)
   const [satellite, setSatellite] = React.useState(false)
+  const [destLatLng, setDestLatLng] = React.useState<{ lat: number; lng: number } | null>(null)
   const mapRef = React.useRef<HTMLDivElement | null>(null)
   const [userRegisterId, setUserRegisterId] = React.useState<string | null>(null)
   const mapInstRef = React.useRef<any>(null)
   const locationRef = React.useRef<any>(null)
+  const baseLayerRef = React.useRef<any>(null)
+  const osmLayerRef = React.useRef<any>(null)
+  const satLayerRef = React.useRef<any>(null)
 
   const loadLeaflet = React.useCallback(async () => {
     if (typeof window === 'undefined') return
@@ -88,22 +92,49 @@ export default function SharedTerritoryPage() {
       m.setView([0, 0], 2)
       const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' })
       const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles © Esri' })
-      ;(satellite ? sat : osm).addTo(m)
-      setTimeout(() => {
-        try { m.invalidateSize() } catch {}
-      }, 0)
+      osmLayerRef.current = osm
+      satLayerRef.current = sat
+      const base = satellite ? sat : osm
+      base.addTo(m)
+      baseLayerRef.current = base
+      setTimeout(() => { try { m.invalidateSize() } catch {} }, 0)
       const loc = new L.FeatureGroup()
       locationRef.current = loc
       m.addLayer(loc)
       try {
         const gj = JSON.parse(territory.geoJson)
         const layer = L.geoJSON(gj).addTo(m)
-        if (layer.getBounds && layer.getBounds().isValid()) m.fitBounds(layer.getBounds())
+        if (layer.getBounds && layer.getBounds().isValid()) {
+          const b = layer.getBounds()
+          m.fitBounds(b)
+          const c = b.getCenter()
+          setDestLatLng({ lat: c.lat, lng: c.lng })
+        }
       } catch {}
-      return () => { m.remove(); mapInstRef.current = null }
+      return () => { m.remove(); mapInstRef.current = null; baseLayerRef.current = null }
     }
     run()
-  }, [territory?.geoJson, loadLeaflet, satellite])
+  }, [territory?.geoJson, loadLeaflet])
+
+  React.useEffect(() => {
+    const m = mapInstRef.current
+    const next = satellite ? satLayerRef.current : osmLayerRef.current
+    const curr = baseLayerRef.current
+    if (!m || !next) return
+    try { if (curr) m.removeLayer(curr) } catch {}
+    try { next.addTo(m); baseLayerRef.current = next } catch {}
+    try { m.invalidateSize() } catch {}
+  }, [satellite])
+
+  const handleDirections = React.useCallback(() => {
+    const d = destLatLng
+    if (!d) return
+    const isApple = typeof navigator !== 'undefined' && /iP(hone|od|ad)|Mac/i.test(navigator.userAgent)
+    const url = isApple
+      ? `https://maps.apple.com/?daddr=${d.lat},${d.lng}`
+      : `https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lng}`
+    try { window.open(url, '_blank') } catch {}
+  }, [destLatLng])
 
   const handleLocate = React.useCallback(() => {
     const L = (window as any).L
@@ -252,7 +283,7 @@ export default function SharedTerritoryPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm"
+                className="fixed inset-0 z-9999 bg-black/95 backdrop-blur-sm"
                 onClick={() => setFullImage(false)}
               >
                 <div className="absolute top-4 right-4">
@@ -323,6 +354,16 @@ export default function SharedTerritoryPage() {
                   className="text-xs sm:text-sm"
                 >
                   {satellite ? 'Mapa' : 'Satélite'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDirections}
+                  disabled={!destLatLng}
+                  className="gap-2 text-xs sm:text-sm"
+                >
+                  <MapIcon className="h-4 w-4" />
+                  <span className="hidden sm:inline">Como chegar</span>
                 </Button>
                 <Button
                   variant="outline"
