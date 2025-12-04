@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { toast } from "sonner"
 import { CalendarDays, Users, UserCircle, BookOpen, Music, MessageSquare, Save, ChevronsUpDown, Edit3, Check, X, Plus, ChevronLeft, ChevronRight } from "lucide-react"
@@ -299,6 +300,7 @@ export default function WeekendMeeting() {
   const filterOradorInterno = React.useCallback((r: RegisterOpt) => isEligibleElderOrServant(r), [isEligibleElderOrServant])
 
   const [newExternal, setNewExternal] = React.useState<{ nome: string; congregacao?: string; contato?: string }>({ nome: "" })
+  const [externalDialogOpen, setExternalDialogOpen] = React.useState(false)
 
   const handleAddExternal = React.useCallback(async () => {
     try {
@@ -313,6 +315,11 @@ export default function WeekendMeeting() {
       toast.error(msg)
     }
   }, [newExternal, congregacaoId, refreshExternalSpeakers])
+
+  const handleAddExternalAndClose = React.useCallback(async () => {
+    await handleAddExternal()
+    setExternalDialogOpen(false)
+  }, [handleAddExternal])
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -392,6 +399,45 @@ export default function WeekendMeeting() {
                         <ExternalSpeakerCombo externalSpeakers={externalSpeakers} value={a.orador_externo_id} onChange={(id) => updateAssign(w.dateStr, "orador_externo_id", id)} disabled={!canEdit} />
                       ) : (
                         <FilteredRegisterCombo registers={registers} value={a.orador_register_id} onChange={(id) => updateAssign(w.dateStr, "orador_register_id", id)} filter={filterOradorInterno} disabled={!canEdit} />
+                      )}
+                      {canEdit && (
+                        <div className="flex justify-end">
+                          <Dialog open={externalDialogOpen} onOpenChange={setExternalDialogOpen}>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm" className="mt-2 gap-2">
+                                <Plus className="h-4 w-4" />
+                                Adicionar orador externo
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Novo orador externo</DialogTitle>
+                                <DialogDescription>Cadastre rapidamente para selecionar.</DialogDescription>
+                              </DialogHeader>
+                              <div className="grid gap-3 sm:grid-cols-3">
+                                <div className="space-y-2">
+                                  <Label className="text-xs">Nome</Label>
+                                  <Input value={newExternal.nome} onChange={(e) => setNewExternal((curr) => ({ ...curr, nome: e.target.value }))} />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-xs">Congregação</Label>
+                                  <Input value={newExternal.congregacao || ""} onChange={(e) => setNewExternal((curr) => ({ ...curr, congregacao: e.target.value }))} />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-xs">Contato</Label>
+                                  <Input value={newExternal.contato || ""} onChange={(e) => setNewExternal((curr) => ({ ...curr, contato: e.target.value }))} />
+                                </div>
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <Button variant="outline" onClick={() => setExternalDialogOpen(false)}>Cancelar</Button>
+                                <Button onClick={handleAddExternalAndClose} className="gap-2">
+                                  <Save className="h-4 w-4" />
+                                  Salvar
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
                       )}
                     </div>
                     <div className="space-y-2">
