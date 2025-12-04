@@ -20,6 +20,7 @@ import {
   getCarrinhoAssignmentsMonth,
   listExternalSpeakers,
   getMidweekScheduleMonth,
+  listFamilies,
   type PregacaoEntry,
   type PregacaoFixedDoc,
   type MidweekAssignMonthDoc,
@@ -27,6 +28,7 @@ import {
   type CleaningAssignMonthDoc,
   type CarrinhoAssignMonthDoc,
   type MidweekScheduleMonthDoc,
+  type FamilyDoc,
 } from "@/lib/firebase"
 import { designationLabels } from "@/types/register-labels"
 import { MidweekScheduleSimple, type MidweekIncomingType, type MidweekAssignmentsDisplay } from "@/app/dashboard/reuniao/meio-de-semana/MidweekSimple"
@@ -48,6 +50,17 @@ export default function PublicCongregacaoPage() {
   const regById = React.useMemo(() => new Map(registers.map(r => [r.id, r.nomeCompleto])), [registers])
   const [extSpeakers, setExtSpeakers] = React.useState<{ id: string; nome: string }[]>([])
   const extById = React.useMemo(() => new Map(extSpeakers.map(e => [e.id, e.nome])), [extSpeakers])
+  const [families, setFamilies] = React.useState<({ id: string } & FamilyDoc)[]>([])
+  const familyDisplayById = React.useMemo(() => {
+    const map = new Map<string, string>()
+    families.forEach(f => {
+      const members = (f.membros || []).map(m => regById.get(m.registerId) || m.registerId)
+      const title = f.nome && f.nome.length > 0 ? f.nome : "Família"
+      const display = members.length > 0 ? `${title}: ${members.join(', ')}` : title
+      map.set(f.id, display)
+    })
+    return map
+  }, [families, regById])
   const [selectedWeek, setSelectedWeek] = React.useState<string>("")
   const [selectPolicy, setSelectPolicy] = React.useState<'nearest'|'first'|'last'>('nearest')
 
@@ -115,6 +128,10 @@ export default function PublicCongregacaoPage() {
         try {
           const exts = await listExternalSpeakers(cid)
           setExtSpeakers(exts.map(x => ({ id: x.id, nome: x.nome })))
+        } catch {}
+        try {
+          const fams = await listFamilies(cid)
+          setFamilies(fams)
         } catch {}
         const pf = await getPregacaoFixed(cid)
         setPregFixed(pf ?? { porDia: {}, diasAtivos: [] })
@@ -524,11 +541,11 @@ export default function PublicCongregacaoPage() {
                   <div className="mt-2 grid gap-2 md:grid-cols-2">
                     <div>
                       <div className="text-xs font-medium">Meio de semana</div>
-                      <div className="text-xs text-muted-foreground">{Array.isArray(cleanWeeks[selectedWeek].midweek_families) && cleanWeeks[selectedWeek].midweek_families!.length > 0 ? cleanWeeks[selectedWeek].midweek_families!.map((id: string) => regById.get(id) || id).join(', ') : '—'}</div>
+                      <div className="text-xs text-muted-foreground">{Array.isArray(cleanWeeks[selectedWeek].midweek_families) && cleanWeeks[selectedWeek].midweek_families!.length > 0 ? cleanWeeks[selectedWeek].midweek_families!.map((id: string) => familyDisplayById.get(id) || id).join(', ') : '—'}</div>
                     </div>
                     <div>
                       <div className="text-xs font-medium">Fim de semana</div>
-                      <div className="text-xs text-muted-foreground">{Array.isArray(cleanWeeks[selectedWeek].weekend_families) && cleanWeeks[selectedWeek].weekend_families!.length > 0 ? cleanWeeks[selectedWeek].weekend_families!.map((id: string) => regById.get(id) || id).join(', ') : '—'}</div>
+                      <div className="text-xs text-muted-foreground">{Array.isArray(cleanWeeks[selectedWeek].weekend_families) && cleanWeeks[selectedWeek].weekend_families!.length > 0 ? cleanWeeks[selectedWeek].weekend_families!.map((id: string) => familyDisplayById.get(id) || id).join(', ') : '—'}</div>
                     </div>
                   </div>
                   {cleanWeeks[selectedWeek].observacoes ? (<div className="mt-2 text-xs text-muted-foreground">Obs.: {cleanWeeks[selectedWeek].observacoes}</div>) : null}
