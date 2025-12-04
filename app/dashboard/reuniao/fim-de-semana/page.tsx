@@ -19,6 +19,7 @@ import {
   updateWeekendAssignmentsWeek,
   listExternalSpeakers,
   createExternalSpeaker,
+  getRegisterDoc,
   type WeekendAssignWeek,
   type ExternalSpeakerDoc,
 } from "@/lib/firebase"
@@ -45,6 +46,7 @@ function useWeekendData() {
   const assignByWeekRef = React.useRef(assignByWeek)
   React.useEffect(() => { assignByWeekRef.current = assignByWeek }, [assignByWeek])
   const saveTimersRef = React.useRef<Map<string, any>>(new Map())
+  const [canEdit, setCanEdit] = React.useState(false)
 
   React.useEffect(() => {
     const run = async () => {
@@ -62,6 +64,19 @@ function useWeekendData() {
         const ext = await listExternalSpeakers(u.congregacaoId)
         setExternalSpeakers(ext)
       } catch {}
+      try {
+        if (u.registerId) {
+          const reg = await getRegisterDoc(u.congregacaoId, u.registerId)
+          const responsabilidades = reg?.responsabilidades || []
+          const priv = reg?.privilegioServico || null
+          const allowed = priv === 'anciao' || responsabilidades.includes('coordenador') || responsabilidades.includes('superintendente_discursos_publicos') || responsabilidades.includes('servo_discursos')
+          setCanEdit(allowed)
+        } else {
+          setCanEdit(false)
+        }
+      } catch {
+        setCanEdit(false)
+      }
     }
     run()
   }, [user])
@@ -124,6 +139,7 @@ function useWeekendData() {
     assignByWeek, updateAssign,
     congregacaoId,
     refreshExternalSpeakers,
+    canEdit,
   }
 }
 
@@ -146,7 +162,7 @@ function useWeekendWeeks(monthId: string, fimDia: string) {
   return weeks
 }
 
-function FilteredRegisterCombo({ value, onChange, registers, filter, placeholder = "Selecionar..." }: { value?: string; onChange: (id: string) => void; registers: RegisterOpt[]; filter?: (r: RegisterOpt) => boolean; placeholder?: string }) {
+function FilteredRegisterCombo({ value, onChange, registers, filter, placeholder = "Selecionar...", disabled }: { value?: string; onChange: (id: string) => void; registers: RegisterOpt[]; filter?: (r: RegisterOpt) => boolean; placeholder?: string; disabled?: boolean }) {
   const [open, setOpen] = React.useState(false)
   const label = React.useMemo(() => {
     const r = registers.find(x => x.id === value)
@@ -154,9 +170,9 @@ function FilteredRegisterCombo({ value, onChange, registers, filter, placeholder
   }, [registers, value, placeholder])
   const list = React.useMemo(() => (filter ? registers.filter(filter) : registers), [registers, filter])
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open && !disabled} onOpenChange={(o)=>!disabled && setOpen(o)}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" role="combobox" aria-expanded={open} className="justify-between w-full h-auto min-h-[32px] px-2 py-1 text-sm font-normal hover:bg-muted/50">
+        <Button variant="ghost" role="combobox" aria-expanded={open} className="justify-between w-full h-auto min-h-[32px] px-2 py-1 text-sm font-normal hover:bg-muted/50" disabled={disabled}>
           <span className="truncate text-left flex-1">{label}</span>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
         </Button>
@@ -180,14 +196,14 @@ function FilteredRegisterCombo({ value, onChange, registers, filter, placeholder
   )
 }
 
-function TalksCombo({ value, onChange }: { value?: string; onChange: (id: string) => void }) {
+function TalksCombo({ value, onChange, disabled }: { value?: string; onChange: (id: string) => void; disabled?: boolean }) {
   const [open, setOpen] = React.useState(false)
   const items = React.useMemo(() => Object.entries(talks).map(([k, v]) => ({ id: k, title: String(v) })), [])
   const label = value ? (items.find(i => i.id === value)?.title || "Selecionar...") : "Selecionar..."
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open && !disabled} onOpenChange={(o)=>!disabled && setOpen(o)}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" role="combobox" aria-expanded={open} className="justify-between w-full h-auto min-h-[32px] px-2 py-1 text-sm font-normal hover:bg-muted/50">
+        <Button variant="ghost" role="combobox" aria-expanded={open} className="justify-between w-full h-auto min-h-[32px] px-2 py-1 text-sm font-normal hover:bg-muted/50" disabled={disabled}>
           <span className="truncate text-left flex-1">{label}</span>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
         </Button>
@@ -211,14 +227,14 @@ function TalksCombo({ value, onChange }: { value?: string; onChange: (id: string
   )
 }
 
-function SongsCombo({ value, onChange }: { value?: string; onChange: (id: string) => void }) {
+function SongsCombo({ value, onChange, disabled }: { value?: string; onChange: (id: string) => void; disabled?: boolean }) {
   const [open, setOpen] = React.useState(false)
   const items = React.useMemo(() => Object.entries(songs).map(([k, v]) => ({ id: k, title: String(v) })), [])
   const label = value ? (items.find(i => i.id === value)?.title || "Selecionar...") : "Selecionar..."
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open && !disabled} onOpenChange={(o)=>!disabled && setOpen(o)}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" role="combobox" aria-expanded={open} className="justify-between w-full h-auto min-h-[32px] px-2 py-1 text-sm font-normal hover:bg-muted/50">
+        <Button variant="ghost" role="combobox" aria-expanded={open} className="justify-between w-full h-auto min-h-[32px] px-2 py-1 text-sm font-normal hover:bg-muted/50" disabled={disabled}>
           <span className="truncate text-left flex-1">{label}</span>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
         </Button>
@@ -242,13 +258,13 @@ function SongsCombo({ value, onChange }: { value?: string; onChange: (id: string
   )
 }
 
-function ExternalSpeakerCombo({ value, onChange, externalSpeakers }: { value?: string; onChange: (id: string) => void; externalSpeakers: ({ id: string } & ExternalSpeakerDoc)[] }) {
+function ExternalSpeakerCombo({ value, onChange, externalSpeakers, disabled }: { value?: string; onChange: (id: string) => void; externalSpeakers: ({ id: string } & ExternalSpeakerDoc)[]; disabled?: boolean }) {
   const [open, setOpen] = React.useState(false)
   const label = value ? (externalSpeakers.find(e => e.id === value)?.nome || "Selecionar...") : "Selecionar..."
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open && !disabled} onOpenChange={(o)=>!disabled && setOpen(o)}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" role="combobox" aria-expanded={open} className="justify-between w-full h-auto min-h-[32px] px-2 py-1 text-sm font-normal hover:bg-muted/50">
+        <Button variant="ghost" role="combobox" aria-expanded={open} className="justify-between w-full h-auto min-h-[32px] px-2 py-1 text-sm font-normal hover:bg-muted/50" disabled={disabled}>
           <span className="truncate text-left flex-1">{label}</span>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
         </Button>
@@ -273,7 +289,7 @@ function ExternalSpeakerCombo({ value, onChange, externalSpeakers }: { value?: s
 }
 
 export default function WeekendMeeting() {
-  const { monthId, setMonthId, fimDia, fimHora, registers, externalSpeakers, regById, assignByWeek, updateAssign, congregacaoId, refreshExternalSpeakers } = useWeekendData()
+  const { monthId, setMonthId, fimDia, fimHora, registers, externalSpeakers, regById, assignByWeek, updateAssign, congregacaoId, refreshExternalSpeakers, canEdit } = useWeekendData()
   const weeks = useWeekendWeeks(monthId, fimDia)
 
   const isEligibleElderOrServant = React.useCallback((r: RegisterOpt) => r.sexo === "homem" && (r.privilegioServico === "anciao" || r.privilegioServico === "servo_ministerial"), [])
@@ -336,7 +352,7 @@ export default function WeekendMeeting() {
                       <Users className="h-3 w-3" />
                       {designationLabels["presidente_fim_semana"]}
                     </Label>
-                    <FilteredRegisterCombo registers={registers} value={a.presidente_fim_semana} onChange={(id) => updateAssign(w.dateStr, "presidente_fim_semana", id)} filter={filterPresidente} />
+                      <FilteredRegisterCombo registers={registers} value={a.presidente_fim_semana} onChange={(id) => updateAssign(w.dateStr, "presidente_fim_semana", id)} filter={filterPresidente} disabled={!canEdit} />
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -345,14 +361,14 @@ export default function WeekendMeeting() {
                         <Users className="h-3 w-3" />
                         {designationLabels["dirigente_sentinela"]}
                       </Label>
-                      <FilteredRegisterCombo registers={registers} value={a.dirigente_sentinela} onChange={(id) => updateAssign(w.dateStr, "dirigente_sentinela", id)} filter={filterDirigente} />
+                      <FilteredRegisterCombo registers={registers} value={a.dirigente_sentinela} onChange={(id) => updateAssign(w.dateStr, "dirigente_sentinela", id)} filter={filterDirigente} disabled={!canEdit} />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs flex items-center gap-1.5">
                         <BookOpen className="h-3 w-3" />
                         {designationLabels["leitor_sentinela"]}
                       </Label>
-                      <FilteredRegisterCombo registers={registers} value={a.leitor_sentinela} onChange={(id) => updateAssign(w.dateStr, "leitor_sentinela", id)} filter={filterLeitor} />
+                      <FilteredRegisterCombo registers={registers} value={a.leitor_sentinela} onChange={(id) => updateAssign(w.dateStr, "leitor_sentinela", id)} filter={filterLeitor} disabled={!canEdit} />
                     </div>
                   </div>
 
@@ -362,18 +378,20 @@ export default function WeekendMeeting() {
                         <Users className="h-3 w-3" />
                         {designationLabels["discurso_publico"]}
                       </Label>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <div>
-                          <Button variant={a.orador_tipo === "externo" ? "default" : "outline"} size="sm" className="w-full" onClick={() => updateAssign(w.dateStr, "orador_tipo", "externo")}>Externo</Button>
+                      {canEdit && (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div>
+                            <Button variant={a.orador_tipo === "externo" ? "default" : "outline"} size="sm" className="w-full" onClick={() => updateAssign(w.dateStr, "orador_tipo", "externo")}>Externo</Button>
+                          </div>
+                          <div>
+                            <Button variant={a.orador_tipo === "interno" || !a.orador_tipo ? "default" : "outline"} size="sm" className="w-full" onClick={() => updateAssign(w.dateStr, "orador_tipo", "interno")}>Interno</Button>
+                          </div>
                         </div>
-                        <div>
-                          <Button variant={a.orador_tipo === "interno" || !a.orador_tipo ? "default" : "outline"} size="sm" className="w-full" onClick={() => updateAssign(w.dateStr, "orador_tipo", "interno")}>Interno</Button>
-                        </div>
-                      </div>
+                      )}
                       {(a.orador_tipo === "externo") ? (
-                        <ExternalSpeakerCombo externalSpeakers={externalSpeakers} value={a.orador_externo_id} onChange={(id) => updateAssign(w.dateStr, "orador_externo_id", id)} />
+                        <ExternalSpeakerCombo externalSpeakers={externalSpeakers} value={a.orador_externo_id} onChange={(id) => updateAssign(w.dateStr, "orador_externo_id", id)} disabled={!canEdit} />
                       ) : (
-                        <FilteredRegisterCombo registers={registers} value={a.orador_register_id} onChange={(id) => updateAssign(w.dateStr, "orador_register_id", id)} filter={filterOradorInterno} />
+                        <FilteredRegisterCombo registers={registers} value={a.orador_register_id} onChange={(id) => updateAssign(w.dateStr, "orador_register_id", id)} filter={filterOradorInterno} disabled={!canEdit} />
                       )}
                     </div>
                     <div className="space-y-2">
@@ -381,7 +399,7 @@ export default function WeekendMeeting() {
                         <Music className="h-3 w-3" />
                         Cântico
                       </Label>
-                      <SongsCombo value={a.discurso_publico_cantico} onChange={(id) => updateAssign(w.dateStr, "discurso_publico_cantico", id)} />
+                      <SongsCombo value={a.discurso_publico_cantico} onChange={(id) => updateAssign(w.dateStr, "discurso_publico_cantico", id)} disabled={!canEdit} />
                     </div>
                   </div>
 
@@ -390,7 +408,7 @@ export default function WeekendMeeting() {
                       <MessageSquare className="h-3 w-3" />
                       Tema do discurso
                     </Label>
-                    <TalksCombo value={a.discurso_publico_tema} onChange={(id) => updateAssign(w.dateStr, "discurso_publico_tema", id)} />
+                    <TalksCombo value={a.discurso_publico_tema} onChange={(id) => updateAssign(w.dateStr, "discurso_publico_tema", id)} disabled={!canEdit} />
                   </div>
 
                   <div className="space-y-2">
@@ -398,7 +416,7 @@ export default function WeekendMeeting() {
                       <UserCircle className="h-3 w-3" />
                       Hospitalidade (família)
                     </Label>
-                    <FilteredRegisterCombo registers={registers} value={a.hospitalidade_register_id} onChange={(id) => updateAssign(w.dateStr, "hospitalidade_register_id", id)} />
+                    <FilteredRegisterCombo registers={registers} value={a.hospitalidade_register_id} onChange={(id) => updateAssign(w.dateStr, "hospitalidade_register_id", id)} disabled={!canEdit} />
                   </div>
                 </div>
               </motion.div>
@@ -416,19 +434,19 @@ export default function WeekendMeeting() {
         <div className="grid gap-3 sm:grid-cols-3 mt-3">
           <div className="space-y-2">
             <Label className="text-xs">Nome</Label>
-            <Input value={newExternal.nome} onChange={(e) => setNewExternal(curr => ({ ...curr, nome: e.target.value }))} />
+            <Input value={newExternal.nome} onChange={(e) => setNewExternal(curr => ({ ...curr, nome: e.target.value }))} disabled={!canEdit} />
           </div>
           <div className="space-y-2">
             <Label className="text-xs">Congregação</Label>
-            <Input value={newExternal.congregacao || ""} onChange={(e) => setNewExternal(curr => ({ ...curr, congregacao: e.target.value }))} />
+            <Input value={newExternal.congregacao || ""} onChange={(e) => setNewExternal(curr => ({ ...curr, congregacao: e.target.value }))} disabled={!canEdit} />
           </div>
           <div className="space-y-2">
             <Label className="text-xs">Contato</Label>
-            <Input value={newExternal.contato || ""} onChange={(e) => setNewExternal(curr => ({ ...curr, contato: e.target.value }))} />
+            <Input value={newExternal.contato || ""} onChange={(e) => setNewExternal(curr => ({ ...curr, contato: e.target.value }))} disabled={!canEdit} />
           </div>
         </div>
         <div className="flex justify-end pt-3">
-          <Button onClick={handleAddExternal} className="gap-2">
+          <Button onClick={handleAddExternal} className="gap-2" disabled={!canEdit}>
             <Plus className="h-4 w-4" />
             Adicionar
           </Button>

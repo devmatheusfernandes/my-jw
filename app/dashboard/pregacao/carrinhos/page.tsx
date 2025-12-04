@@ -9,7 +9,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { toast } from "sonner"
 import { CalendarDays, CalendarClock, Users, MapPin, Repeat, Plus, ChevronLeft, ChevronRight } from "lucide-react"
 import { useAuth } from "@/components/providers/auth-provider"
-import { getUserDoc, getCongregationDoc, listRegisters, getCarrinhoAssignmentsMonth, updateCarrinhoAssignmentsWeek, type CarrinhoSlot, type CarrinhoAssignWeek } from "@/lib/firebase"
+import { getUserDoc, getCongregationDoc, listRegisters, getCarrinhoAssignmentsMonth, updateCarrinhoAssignmentsWeek, getRegisterDoc, type CarrinhoSlot, type CarrinhoAssignWeek } from "@/lib/firebase"
 
 type RegOpt = { id: string; nome: string }
 
@@ -44,6 +44,7 @@ function useCarrinhos() {
   const [registers, setRegisters] = React.useState<RegOpt[]>([])
   const [weeks, setWeeks] = React.useState<Record<string, CarrinhoAssignWeek>>({})
   const [loading, setLoading] = React.useState<boolean>(true)
+  const [canEdit, setCanEdit] = React.useState<boolean>(false)
 
   React.useEffect(() => {
     const run = async () => {
@@ -57,6 +58,19 @@ function useCarrinhos() {
         const regs = await listRegisters(u.congregacaoId)
         const opts = regs.filter(r => r.status === 'publicador_batizado').map(r => ({ id: r.id, nome: r.nomeCompleto }))
         setRegisters(opts)
+        try {
+          if (u.registerId) {
+            const reg = await getRegisterDoc(u.congregacaoId, u.registerId)
+            const responsabilidades = reg?.responsabilidades || []
+            const priv = reg?.privilegioServico || null
+            const allowed = priv === 'anciao' || responsabilidades.includes('coordenador') || responsabilidades.includes('servo_limpeza')
+            setCanEdit(allowed)
+          } else {
+            setCanEdit(false)
+          }
+        } catch {
+          setCanEdit(false)
+        }
       } finally {
         setLoading(false)
       }
@@ -92,7 +106,7 @@ function useCarrinhos() {
     }
   }, [congregacaoId, monthId])
 
-  return { monthId, setMonthId, congregacaoId, locations, registers, weeks, setWeeks, saveWeek, loading }
+  return { monthId, setMonthId, congregacaoId, locations, registers, weeks, setWeeks, saveWeek, loading, canEdit }
 }
 
 function MonthCombo({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -203,7 +217,7 @@ function SelectRegisters({ registers, values, onChange, disabled }: { registers:
 }
 
 export default function CarrinhosPage() {
-  const { monthId, setMonthId, locations, registers, weeks, setWeeks, saveWeek, loading } = useCarrinhos()
+  const { monthId, setMonthId, locations, registers, weeks, setWeeks, saveWeek, loading, canEdit } = useCarrinhos()
   const [editing, setEditing] = React.useState<boolean>(false)
   const [date, setDate] = React.useState<string>("")
   const [start, setStart] = React.useState<string>("09:00")
@@ -213,9 +227,10 @@ export default function CarrinhosPage() {
   const [fixed, setFixed] = React.useState<boolean>(false)
   const [repeatMonthly, setRepeatMonthly] = React.useState<boolean>(false)
 
-  const disabled = loading || !editing
+  const disabled = loading || !editing || !canEdit
 
   const handleAdd = React.useCallback(async () => {
+    if (!canEdit) { toast.error('Sem permissão para editar'); return }
     if (!date) { toast.error('Selecione uma data'); return }
     if (!location) { toast.error('Selecione o local'); return }
     if ((participants || []).length < 2) { toast.error('Selecione no mínimo dois participantes batizados'); return }
@@ -234,7 +249,7 @@ export default function CarrinhosPage() {
     await Promise.all(applyTo.map(async (k)=>{ await saveWeek(k, nextWeeks[k]) }))
     setParticipants([])
     toast.success('Slot adicionado')
-  }, [date, start, duration, location, participants, fixed, repeatMonthly, monthId, weeks, setWeeks, saveWeek])
+  }, [canEdit, date, start, duration, location, participants, fixed, repeatMonthly, monthId, weeks, setWeeks, saveWeek])
 
   const monthSlots = React.useMemo(() => {
     const out: { wd: string; slots: CarrinhoSlot[] }[] = []
@@ -251,6 +266,7 @@ export default function CarrinhosPage() {
   }, [weeks, monthId])
 
   const updateSlot = React.useCallback((wd: string, idx: number, patch: Partial<CarrinhoSlot>) => {
+    if (!canEdit) { toast.error('Sem permissão para editar'); return }
     setWeeks((curr) => {
       const w = curr[wd] || {}
       const list = Array.isArray(w.slots) ? w.slots.slice() : []
@@ -260,9 +276,10 @@ export default function CarrinhosPage() {
       saveWeek(wd, nextWeek)
       return next
     })
-  }, [setWeeks, saveWeek])
+  }, [setWeeks, saveWeek, canEdit])
 
   const removeSlot = React.useCallback((wd: string, idx: number) => {
+    if (!canEdit) { toast.error('Sem permissão para editar'); return }
     setWeeks((curr) => {
       const w = curr[wd] || {}
       const list = Array.isArray(w.slots) ? w.slots.slice() : []
@@ -273,7 +290,7 @@ export default function CarrinhosPage() {
       return next
     })
     toast.success('Slot removido')
-  }, [setWeeks, saveWeek])
+  }, [setWeeks, saveWeek, canEdit])
 
   return (
     <div className="space-y-6 p-4">
@@ -286,9 +303,11 @@ export default function CarrinhosPage() {
           <div className="flex items-center gap-2">
             <Label htmlFor="carrMonthId" className="text-xs whitespace-nowrap">Mês:</Label>
             <MonthCombo value={monthId} onChange={setMonthId} />
-            <Button onClick={()=>setEditing((e)=>!e)} variant={editing ? "outline" : undefined} className="h-8 px-3 text-xs">
-              {editing ? "Cancelar" : "Editar"}
-            </Button>
+            {canEdit && (
+              <Button onClick={()=>setEditing((e)=>!e)} variant={editing ? "outline" : undefined} className="h-8 px-3 text-xs">
+                {editing ? "Cancelar" : "Editar"}
+              </Button>
+            )}
           </div>
         </div>
         {editing ? (

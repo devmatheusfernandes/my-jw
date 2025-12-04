@@ -19,6 +19,7 @@ import {
   updateMidweekAssignmentsWeek,
   getWeekendAssignmentsMonth,
   updateWeekendAssignmentsWeek,
+  getRegisterDoc,
 } from "@/lib/firebase"
 
 type RegisterOpt = { id: string; nomeCompleto: string; designacoesAprovadas?: string[] }
@@ -46,6 +47,7 @@ function useMecanicas() {
   React.useEffect(() => { wkRef.current = weekends }, [weekends])
   const midSaveTimers = React.useRef<Map<string, any>>(new Map())
   const wkSaveTimers = React.useRef<Map<string, any>>(new Map())
+  const [canEdit, setCanEdit] = React.useState(false)
 
   React.useEffect(() => {
     const run = async () => {
@@ -59,6 +61,19 @@ function useMecanicas() {
       if (c?.meioSemanaDia) setMeioDia(c.meioSemanaDia)
       const regs = await listRegisters(u.congregacaoId)
       setRegisters(regs.map(r => ({ id: r.id, nomeCompleto: r.nomeCompleto, designacoesAprovadas: r.designacoesAprovadas || [] })))
+      try {
+        if (u.registerId) {
+          const reg = await getRegisterDoc(u.congregacaoId, u.registerId)
+          const responsabilidades = reg?.responsabilidades || []
+          const priv = reg?.privilegioServico || null
+          const allowed = priv === 'anciao' || responsabilidades.includes('coordenador') || responsabilidades.includes('superintendente_servico') || responsabilidades.includes('superintendente_audio_video') || responsabilidades.includes('servo_audio_video')
+          setCanEdit(allowed)
+        } else {
+          setCanEdit(false)
+        }
+      } catch {
+        setCanEdit(false)
+      }
     }
     run()
   }, [user])
@@ -137,7 +152,7 @@ function useMecanicas() {
     })
   }, [congregacaoId, monthId])
 
-  return { monthId, setMonthId, fimDia, meioDia, registers, midweeks, weekends, updateMid, updateWk, loading }
+  return { monthId, setMonthId, fimDia, meioDia, registers, midweeks, weekends, updateMid, updateWk, loading, canEdit }
 }
 
 function RegistersCombo({ registers, value, onChange, filter, placeholder = "Selecionar...", disabled }: { registers: RegisterOpt[]; value?: string; onChange: (id?: string) => void; filter?: (r: RegisterOpt) => boolean; placeholder?: string; disabled?: boolean }) {
@@ -250,7 +265,7 @@ function useWeekendWeeks(monthId: string, fimDia: string) {
 }
 
 export default function MecanicasPage() {
-  const { monthId, setMonthId, fimDia, meioDia, registers, midweeks, weekends, updateMid, updateWk, loading } = useMecanicas()
+  const { monthId, setMonthId, fimDia, meioDia, registers, midweeks, weekends, updateMid, updateWk, loading, canEdit } = useMecanicas()
   const weekendWeeks = useWeekendWeeks(monthId, fimDia)
   const [editing, setEditing] = React.useState(false)
 
@@ -308,9 +323,11 @@ export default function MecanicasPage() {
             <Label htmlFor="monthId" className="text-sm whitespace-nowrap">Selecionar mês:</Label>
             <MonthCombo value={monthId} onChange={setMonthId} />
           </div>
-          <Button onClick={() => { const next = !editing; setEditing(next); toast.message(next ? 'Modo edição ativado' : 'Modo edição desativado') }} variant={editing ? 'default' : 'outline'} className="h-9">
-            {editing ? 'Concluir edição' : 'Editar'}
-          </Button>
+          {canEdit && (
+            <Button onClick={() => { const next = !editing; setEditing(next); toast.message(next ? 'Modo edição ativado' : 'Modo edição desativado') }} variant={editing ? 'default' : 'outline'} className="h-9">
+              {editing ? 'Concluir edição' : 'Editar'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -337,7 +354,7 @@ export default function MecanicasPage() {
             <div className="space-y-3">
               {Object.entries(midweeks).map(([wd, data], idx) => (
                 <motion.div key={`mid-${wd}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.03 }}>
-                  <WeekCard label={(() => { const [y,m,d] = wd.split('/').map(x=>parseInt(x,10)); const base = new Date(y, m-1, d); const idxMap: Record<string, number> = { domingo: 0, segunda: 1, terça: 2, quarta: 3, quinta: 4, sexta: 5, sábado: 6 }; const target = idxMap[meioDia] ?? base.getDay(); const diff = target - base.getDay(); const meet = new Date(base.getFullYear(), base.getMonth(), base.getDate() + diff); return meet.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) })()} dateStr={wd} registers={registers} data={data as any} onChange={(f,v)=>updateMid(wd,f,v)} editable={editing} />
+                  <WeekCard label={(() => { const [y,m,d] = wd.split('/').map(x=>parseInt(x,10)); const base = new Date(y, m-1, d); const idxMap: Record<string, number> = { domingo: 0, segunda: 1, terça: 2, quarta: 3, quinta: 4, sexta: 5, sábado: 6 }; const target = idxMap[meioDia] ?? base.getDay(); const diff = target - base.getDay(); const meet = new Date(base.getFullYear(), base.getMonth(), base.getDate() + diff); return meet.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) })()} dateStr={wd} registers={registers} data={data as any} onChange={(f,v)=>updateMid(wd,f,v)} editable={editing && canEdit} />
                 </motion.div>
               ))}
             </div>
@@ -357,7 +374,7 @@ export default function MecanicasPage() {
             <div className="space-y-3">
               {weekendWeeks.map((w, idx) => (
                 <motion.div key={`wk-${w.dateStr}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.03 }}>
-                  <WeekCard label={w.label} dateStr={w.dateStr} registers={registers} data={weekends[w.dateStr] as any} onChange={(f,v)=>updateWk(w.dateStr,f,v)} editable={editing} />
+                  <WeekCard label={w.label} dateStr={w.dateStr} registers={registers} data={weekends[w.dateStr] as any} onChange={(f,v)=>updateWk(w.dateStr,f,v)} editable={editing && canEdit} />
                 </motion.div>
               ))}
             </div>

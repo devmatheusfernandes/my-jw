@@ -13,8 +13,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { ChevronDown, ChevronsUpDown, CalendarDays, Users, Settings, Save, Download, Music, Book, Award, Clock, UserCircle, AlertCircle, Edit3, Check, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { designationLabels } from '@/types/register-labels'
+import { useAuth } from '@/components/providers/auth-provider'
+import { getUserDoc, getRegisterDoc } from '@/lib/firebase'
 
 export default function MidweekPage() {
+  const { user } = useAuth()
   const {
     weeks,
     setWeeks,
@@ -41,19 +44,39 @@ export default function MidweekPage() {
   const [importStart, setImportStart] = React.useState<string>('')
   const [importEnd, setImportEnd] = React.useState<string>('')
   const [importLang, setImportLang] = React.useState<'P' | 'E' | 'T'>('T')
+  const [canEdit, setCanEdit] = React.useState(false)
+
+  React.useEffect(() => {
+    const run = async () => {
+      try {
+        const uid = user?.uid
+        if (!uid) { setCanEdit(false); return }
+        const u = await getUserDoc(uid)
+        if (!u?.congregacaoId || !u.registerId) { setCanEdit(false); return }
+        const reg = await getRegisterDoc(u.congregacaoId, u.registerId)
+        const responsabilidades = reg?.responsabilidades || []
+        const priv = reg?.privilegioServico || null
+        const allowed = priv === 'anciao' || responsabilidades.includes('superintendente_vida_ministerio')
+        setCanEdit(!!allowed)
+      } catch {
+        setCanEdit(false)
+      }
+    }
+    run()
+  }, [user])
 
   const handleImportClick = React.useCallback(() => {
     handleImport(importLang, importStart, importEnd)
     setImportOpen(false)
   }, [handleImport, importLang, importStart, importEnd])
 
-  function RegisterCombo({ value, onChange, placeholder = "Selecionar..." }: { value?: string; onChange: (id: string) => void; placeholder?: string }) {
+  function RegisterCombo({ value, onChange, placeholder = "Selecionar...", disabled }: { value?: string; onChange: (id: string) => void; placeholder?: string; disabled?: boolean }) {
     const [open, setOpen] = React.useState(false)
     const label = value ? (regById.get(value) || placeholder) : placeholder
     return (
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open && !disabled} onOpenChange={(o)=>!disabled && setOpen(o)}>
         <PopoverTrigger asChild>
-          <Button variant="ghost" role="combobox" aria-expanded={open} className="justify-between w-full h-auto min-h-[32px] px-2 py-1 text-sm font-normal hover:bg-muted/50">
+          <Button variant="ghost" role="combobox" aria-expanded={open} className="justify-between w-full h-auto min-h-[32px] px-2 py-1 text-sm font-normal hover:bg-muted/50" disabled={disabled}>
             <span className="truncate text-left flex-1">{label}</span>
             <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
           </Button>
@@ -100,6 +123,7 @@ export default function MidweekPage() {
             value={typeof value === 'string' ? value : undefined}
             onChange={(id) => updateAssign(weekDate, field, id)}
             placeholder="Designar..."
+            disabled={!canEdit}
           />
         </div>
       </div>
@@ -174,6 +198,7 @@ export default function MidweekPage() {
               <CalendarDays className="h-4 w-4 text-primary flex-shrink-0" />
               <span className="truncate">{w.mwb_week_date_locale}</span>
             </div>
+            {canEdit && (
             <Button
               variant={isEditing ? "default" : "ghost"}
               size="sm"
@@ -186,6 +211,7 @@ export default function MidweekPage() {
                 <><Edit3 className="h-3 w-3" /> Editar</>
               )}
             </Button>
+            )}
           </div>
           <div className="text-xs text-muted-foreground">
             {w.mwb_weekly_bible_reading}
@@ -197,13 +223,14 @@ export default function MidweekPage() {
               className="h-7 flex-1 rounded-md border bg-background px-2 text-xs"
               value={a.week_type || 'normal'}
               onChange={e => updateAssign(w.week_date, 'week_type', e.target.value)}
+              disabled={!canEdit}
             >
               {TYPES.map(t => (
                 <option key={t.key} value={t.key}>{t.label}</option>
               ))}
             </select>
           </div>
-          {warnings.length > 0 && (
+          {canEdit && warnings.length > 0 && (
             <div className="rounded-md bg-red-50/50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 p-2.5 space-y-1">
               {warnings.map((msg, idx) => (
                 <div key={idx} className="flex items-center gap-1.5 text-xs text-red-700 dark:text-red-300">

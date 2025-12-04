@@ -10,7 +10,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { toast } from "sonner"
 import { WashingMachine, CalendarDays, ChevronsUpDown, WashingMachineIcon, ChevronLeft, ChevronRight } from "lucide-react"
 import { useAuth } from "@/components/providers/auth-provider"
-import { getUserDoc, getCongregationDoc, listFamilies, getMidweekAssignmentsMonth, getWeekendAssignmentsMonth, updateCleaningAssignmentsWeek, getCleaningAssignmentsMonth } from "@/lib/firebase"
+import { getUserDoc, getCongregationDoc, listFamilies, getMidweekAssignmentsMonth, getWeekendAssignmentsMonth, updateCleaningAssignmentsWeek, getCleaningAssignmentsMonth, getRegisterDoc } from "@/lib/firebase"
 
 type FamilyOpt = { id: string; nome?: string }
 type MidAssign = Record<string, { week_type?: 'normal' | 'visita_superintendente' | 'congresso' | 'assembleia' | 'celebracao' | 'sem_reuniao' }>
@@ -31,6 +31,7 @@ function useLimpeza() {
   const [cleanWeeks, setCleanWeeks] = React.useState<Record<string, CleanWeek>>({})
   const [loading, setLoading] = React.useState<boolean>(true)
   const saveTimers = React.useRef<Map<string, any>>(new Map())
+  const [canEdit, setCanEdit] = React.useState<boolean>(false)
 
   React.useEffect(() => {
     const run = async () => {
@@ -44,6 +45,21 @@ function useLimpeza() {
         if (c?.fimSemanaDia) setFimDia(c.fimSemanaDia)
         const fams = await listFamilies(u.congregacaoId)
         setFamilies(fams.map(f => ({ id: f.id, nome: f.nome || "" })))
+        try {
+          if (u.registerId) {
+            const reg = await getRegisterDoc(u.congregacaoId, u.registerId)
+            const responsabilidades = reg?.responsabilidades || []
+            const priv = reg?.privilegioServico || null
+            const isAdmin = !!c?.admins?.includes(uid)
+            const allowed = responsabilidades.includes('coordenador') || responsabilidades.includes('servo_limpeza') || priv === 'servo_ministerial' || priv === 'anciao'
+            setCanEdit(isAdmin || allowed)
+          } else {
+            const isAdmin = !!c?.admins?.includes(uid)
+            setCanEdit(isAdmin)
+          }
+        } catch {
+          setCanEdit(false)
+        }
       } finally {
         setLoading(false)
       }
@@ -101,7 +117,7 @@ function useLimpeza() {
     })
   }, [scheduleSave])
 
-  return { monthId, setMonthId, meioDia, fimDia, families, midAssign, wkAssign, cleanWeeks, updateClean, loading }
+  return { monthId, setMonthId, meioDia, fimDia, families, midAssign, wkAssign, cleanWeeks, updateClean, loading, canEdit }
 }
 
 function FamiliesCombo({ families, values, onChange, disabled }: { families: FamilyOpt[]; values?: string[]; onChange: (vals: string[]) => void; disabled?: boolean }) {
@@ -197,7 +213,7 @@ function MonthCombo({ value, onChange }: { value: string; onChange: (v: string) 
 }
 
 export default function LimpezaPage() {
-  const { monthId, setMonthId, meioDia, fimDia, families, midAssign, wkAssign, cleanWeeks, updateClean, loading } = useLimpeza()
+  const { monthId, setMonthId, meioDia, fimDia, families, midAssign, wkAssign, cleanWeeks, updateClean, loading, canEdit } = useLimpeza()
   const [editing, setEditing] = React.useState(false)
 
   const midDates = React.useMemo(() => weekDatesForMonth(monthId, meioDia), [monthId, meioDia])
@@ -249,10 +265,14 @@ export default function LimpezaPage() {
             <Label htmlFor="monthId" className="text-sm whitespace-nowrap">Selecionar mês:</Label>
             <MonthCombo value={monthId} onChange={setMonthId} />
           </div>
-          <Button onClick={() => { const next = !editing; setEditing(next); toast.message(next ? 'Modo edição ativado' : 'Modo edição desativado') }} variant={editing ? 'default' : 'outline'} className="h-9">
-            {editing ? 'Concluir edição' : 'Editar'}
-          </Button>
-          <Button onClick={autoGenerate} variant="outline" className="h-9">Gerar programação</Button>
+          {canEdit && (
+            <>
+              <Button onClick={() => { const next = !editing; setEditing(next); toast.message(next ? 'Modo edição ativado' : 'Modo edição desativado') }} variant={editing ? 'default' : 'outline'} className="h-9">
+                {editing ? 'Concluir edição' : 'Editar'}
+              </Button>
+              <Button onClick={autoGenerate} variant="outline" className="h-9">Gerar programação</Button>
+            </>
+          )}
         </div>
       </div>
 
