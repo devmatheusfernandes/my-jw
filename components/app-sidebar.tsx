@@ -13,19 +13,37 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/components/providers/auth-provider"
-import { getUserDoc, getRegisterDoc } from "@/lib/firebase"
+import { getUserDoc, getRegisterDoc, getCongregationDoc } from "@/lib/firebase"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
   const [hasCongregation, setHasCongregation] = React.useState(false)
   const [canSeePeople, setCanSeePeople] = React.useState(false)
   const [canSeeTerritory, setCanSeeTerritory] = React.useState(false)
+  const [isAdmin, setIsAdmin] = React.useState(false)
   React.useEffect(() => {
     const run = async () => {
       const uid = user?.uid
-      if (!uid) { setHasCongregation(false); return }
+      if (!uid) { setHasCongregation(false); setIsAdmin(false); return }
       const u = await getUserDoc(uid)
       setHasCongregation(!!u?.congregacaoId)
+      try {
+        let resolvedAdmin = false
+        if (u?.congregacaoId) {
+          const cong = await getCongregationDoc(u.congregacaoId)
+          const admins = cong?.admins || []
+          resolvedAdmin = Array.isArray(admins) && admins.includes(uid)
+          setIsAdmin(!!resolvedAdmin)
+        } else {
+          setIsAdmin(false)
+        }
+        
+        if (resolvedAdmin) {
+          setCanSeePeople(true)
+          setCanSeeTerritory(true)
+          return
+        }
+      } catch { setIsAdmin(false) }
       try {
         if (u?.congregacaoId && u.registerId) {
           const reg = await getRegisterDoc(u.congregacaoId, u.registerId)

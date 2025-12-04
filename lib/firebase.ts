@@ -4,13 +4,13 @@ import { getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, ge
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBUG9XjV4GivPD1sOnpAqyfo7GQsfd5jHw",
-  authDomain: "testing-project-188d3.firebaseapp.com",
-  databaseURL: "https://testing-project-188d3-default-rtdb.firebaseio.com",
-  projectId: "testing-project-188d3",
-  storageBucket: "testing-project-188d3.firebasestorage.app",
-  messagingSenderId: "1019677032831",
-  appId: "1:1019677032831:web:3539fada4e37059aa99a4a",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL!,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 };
 
 const app = initializeApp(firebaseConfig);

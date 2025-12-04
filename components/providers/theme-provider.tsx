@@ -31,5 +31,17 @@ export function ThemeProvider({
       window.removeEventListener("accent-theme-change", onCustom as any)
     }
   }, [])
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    const canSW = "serviceWorker" in navigator
+    const isProd = process.env.NODE_ENV === "production"
+    if (!canSW || !isProd) return
+    const register = () => navigator.serviceWorker.register("/sw.js")
+    if (document.readyState === "complete") {
+      register()
+    } else {
+      window.addEventListener("load", register, { once: true })
+    }
+  }, [])
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>
 }

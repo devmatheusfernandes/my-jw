@@ -18,6 +18,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Meu JW",
   description: "Gerenciar tarefas e responsabilidades congregacionais.",
+  themeColor: "#0ea5e9",
+  appleWebApp: {
+    statusBarStyle: "default",
+    title: "Meu JW",
+    capable: true,
+  },
 };
 
 export default function RootLayout({
