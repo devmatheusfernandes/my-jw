@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Calendar } from "@/components/ui/calendar"
 import { toast } from "sonner"
-import { MapIcon, Image as ImageIcon, Maximize2, Minimize2, LocateFixed, MapPinned, Building2, Calendar as CalendarIcon, FileText, CheckCircle2, XCircle } from "lucide-react"
+import { MapIcon, Image as ImageIcon, Maximize2, Minimize2, LocateFixed, MapPinned, Building2, Calendar as CalendarIcon, FileText, CheckCircle2, XCircle, HelpCircle } from "lucide-react"
 import {
   getTerritoryDoc,
   closeTerritoryRecordForUser,
@@ -16,6 +16,7 @@ import {
   getUserDoc,
 } from "@/lib/firebase"
 import Image from "next/image"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 export default function SharedTerritoryPage() {
   const { user } = useAuth()
@@ -235,9 +236,33 @@ export default function SharedTerritoryPage() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-2"
         >
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <MapPinned className="h-4 w-4" />
-            <span>Território Compartilhado</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <MapPinned className="h-4 w-4" />
+              <span>Território Compartilhado</span>
+            </div>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <HelpCircle className="h-4 w-4" />
+                  <span className="hidden sm:inline">Ajuda</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Ajuda — Território Compartilhado</DialogTitle>
+                  <DialogDescription>Saiba como usar esta página.</DialogDescription>
+                </DialogHeader>
+                <div className="text-sm space-y-2">
+                  <div>• Use <strong>Satélite</strong> para alternar entre mapa e imagens de satélite.</div>
+                  <div>• Clique em <strong>Como chegar</strong> para abrir rotas no Google/Apple Maps.</div>
+                  <div>• <strong>Localizar-me</strong> centra o mapa na sua posição atual.</div>
+                  <div>• Preencha <strong>Data de devolução</strong> e <strong>Observações</strong> para devolver o território.</div>
+                  <div>• <strong>Não Trabalhado</strong> remove o registro aberto deste território.</div>
+                  <div>• Se houver <strong>Imagem do Território</strong>, clique para expandir e visualizar em tela cheia.</div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Território {territory.codigo}</h1>
           <div className="flex items-center gap-2 text-muted-foreground">
