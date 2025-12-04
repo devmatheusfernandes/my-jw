@@ -35,6 +35,7 @@ export default function EditarTerritorioPage() {
   const mapRef = React.useRef<HTMLDivElement | null>(null)
   const drawnRef = React.useRef<any>(null)
   const [openGeoDrawer, setOpenGeoDrawer] = React.useState(false)
+  const mapInstanceRef = React.useRef<any>(null)
 
   const loadLeaflet = React.useCallback(async () => {
     if (typeof window === 'undefined') return
@@ -67,16 +68,18 @@ export default function EditarTerritorioPage() {
   }, [])
 
   React.useEffect(() => {
-    const run = async () => {
-      if (!mapRef.current) return
+    if (loading) return
+    if (!mapRef.current) return
+    if (mapInstanceRef.current) return
+
+    const init = async () => {
       await loadLeaflet()
       const L = (window as any).L
       const m = L.map(mapRef.current)
+      mapInstanceRef.current = m
       m.setView([0, 0], 2)
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(m)
-      setTimeout(() => {
-        try { m.invalidateSize() } catch {}
-      }, 0)
+      setTimeout(() => { try { m.invalidateSize() } catch {} }, 250)
       const drawnItems = new L.FeatureGroup()
       drawnRef.current = drawnItems
       m.addLayer(drawnItems)
@@ -106,21 +109,31 @@ export default function EditarTerritorioPage() {
           if (layer.getBounds && layer.getBounds().isValid()) m.fitBounds(layer.getBounds())
         } catch {}
       }
-      return () => { m.remove() }
     }
-    run()
+    init()
+
+    return () => {
+      const m = mapInstanceRef.current
+      if (m) {
+        try { m.remove() } catch {}
+        mapInstanceRef.current = null
+      }
+      drawnRef.current = null
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadLeaflet])
+  }, [loading, loadLeaflet])
 
   React.useEffect(() => {
     const L = (window as any).L
     const drawnItems = drawnRef.current
+    const m = mapInstanceRef.current
     if (!L || !drawnItems) return
     try {
       drawnItems.clearLayers()
       if (geoJson) {
         const gj = JSON.parse(geoJson)
-        L.geoJSON(gj).addTo(drawnItems)
+        const layer = L.geoJSON(gj).addTo(drawnItems)
+        if (m && layer.getBounds && layer.getBounds().isValid()) m.fitBounds(layer.getBounds())
       }
     } catch {}
   }, [geoJson])

@@ -38,6 +38,7 @@ export default function CriarTerritorioPage() {
   const mapRef = React.useRef<HTMLDivElement | null>(null)
   const drawnRef = React.useRef<any>(null)
   const [openGeoDrawer, setOpenGeoDrawer] = React.useState(false)
+  const mapInstanceRef = React.useRef<any>(null)
   
   const [cities, setCities] = React.useState<string[]>([])
   const [groups, setGroups] = React.useState<string[]>([])
@@ -100,32 +101,44 @@ export default function CriarTerritorioPage() {
   }, [user])
 
   React.useEffect(() => {
+    if (loading) return
+    if (!mapRef.current) return
+    if (mapInstanceRef.current) return
+
     const init = async () => {
-      if (!mapRef.current) return
       await loadLeaflet()
       const L = (window as any).L
-      const m = L.map(mapRef.current)
-      m.setView([0, 0], 2)
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(m)
-      setTimeout(() => { try { m.invalidateSize() } catch {} }, 0)
+      const map = L.map(mapRef.current)
+      mapInstanceRef.current = map
+      map.setView([0, 0], 2)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map)
+      setTimeout(() => { try { map.invalidateSize() } catch {} }, 250)
       const drawnItems = new L.FeatureGroup()
       drawnRef.current = drawnItems
-      m.addLayer(drawnItems)
+      map.addLayer(drawnItems)
       const drawControl = new L.Control.Draw({ draw: { marker: false, circle: false, circlemarker: false }, edit: { featureGroup: drawnItems } })
-      m.addControl(drawControl)
-      m.on(L.Draw.Event.CREATED, function (e: any) {
+      map.addControl(drawControl)
+      map.on(L.Draw.Event.CREATED, function (e: any) {
         drawnItems.clearLayers()
         drawnItems.addLayer(e.layer)
         const gj = drawnItems.toGeoJSON()
         setGeoJson(JSON.stringify(gj))
       })
-      m.on(L.Draw.Event.EDITED, function () { const gj = drawnItems.toGeoJSON(); setGeoJson(JSON.stringify(gj)) })
-      m.on(L.Draw.Event.DELETED, function () { const gj = drawnItems.toGeoJSON(); setGeoJson(JSON.stringify(gj)) })
-      return () => { try { m.remove() } catch {} }
+      map.on(L.Draw.Event.EDITED, function () { const gj = drawnItems.toGeoJSON(); setGeoJson(JSON.stringify(gj)) })
+      map.on(L.Draw.Event.DELETED, function () { const gj = drawnItems.toGeoJSON(); setGeoJson(JSON.stringify(gj)) })
     }
     init()
+
+    return () => {
+      const m = mapInstanceRef.current
+      if (m) {
+        try { m.remove() } catch {}
+        mapInstanceRef.current = null
+      }
+      drawnRef.current = null
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadLeaflet])
+  }, [loading, loadLeaflet])
 
   React.useEffect(() => {
     const L = (window as any).L

@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
-
   if (pathname.startsWith("/dashboard")) {
     const hasAuth = req.cookies.get("auth_uid")
     if (!hasAuth) {
@@ -12,10 +11,8 @@ export function middleware(req: NextRequest) {
       return NextResponse.redirect(url)
     }
   }
-
   return NextResponse.next()
 }
 
-export const config = {
-  matcher: ["/dashboard/:path*"],
-}
+export const config = { matcher: ["/dashboard/:path*"] }
+

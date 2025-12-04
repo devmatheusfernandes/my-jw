@@ -35,9 +35,6 @@ export default function TerritorioPage() {
   const [isAdmin, setIsAdmin] = React.useState(false)
   const [leaders, setLeaders] = React.useState<{ id: string; nomeCompleto: string }[]>([])
   const [territories, setTerritories] = React.useState<({ id: string } & TerritoryDoc)[]>([])
-
-  
-
   const [openAddRecordFor, setOpenAddRecordFor] = React.useState<string | null>(null)
   const [startedAt, setStartedAt] = React.useState("")
   const [finishedAt, setFinishedAt] = React.useState("")
